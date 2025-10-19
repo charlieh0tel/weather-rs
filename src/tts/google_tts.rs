@@ -93,14 +93,14 @@ struct TtsResponse {
 
 impl TtsBackend for GoogleTts {
     fn synthesize(&self, text: &str, format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
-        // For GSM, we'll synthesize as WAV first, then convert
-        let actual_format = if matches!(format, AudioFormat::Gsm) {
-            &AudioFormat::Wav
+        // Google TTS supports most formats directly, except GSM
+        let (google_format, needs_conversion) = if matches!(format, AudioFormat::Gsm) {
+            (&AudioFormat::Wav, true)
         } else {
-            format
+            (format, false)
         };
 
-        let encoding = self.audio_format_to_google_encoding(actual_format)?;
+        let encoding = self.audio_format_to_google_encoding(google_format)?;
 
         let request = TtsRequest {
             input: TtsInput {
@@ -141,16 +141,16 @@ impl TtsBackend for GoogleTts {
             .json()
             .map_err(|e| TtsError::SynthesisError(format!("Failed to parse response: {}", e)))?;
 
-        let mut audio_data = base64::engine::general_purpose::STANDARD
+        let audio_data = base64::engine::general_purpose::STANDARD
             .decode(&tts_response.audio_content)
             .map_err(|e| TtsError::SynthesisError(format!("Failed to decode audio: {}", e)))?;
 
-        // Convert to GSM if requested
-        if matches!(format, AudioFormat::Gsm) {
-            audio_data = convert_wav_to_gsm(&audio_data)?;
+        // Convert format if needed using centralized conversion
+        if needs_conversion {
+            crate::tts::TtsPlayer::convert_audio_format(&audio_data, google_format, format)
+        } else {
+            Ok(audio_data)
         }
-
-        Ok(audio_data)
     }
 
     fn speak(&self, text: &str) -> Result<(), TtsError> {
@@ -162,12 +162,4 @@ impl TtsBackend for GoogleTts {
     fn backend_name(&self) -> &str {
         "Google Cloud TTS"
     }
-}
-
-// Placeholder for GSM conversion - would need actual implementation
-fn convert_wav_to_gsm(_wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
-    Err(TtsError::AudioConversionError(
-        "GSM conversion not yet implemented. Install FFmpeg for audio format conversion."
-            .to_string(),
-    ))
 }

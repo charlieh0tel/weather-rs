@@ -2,8 +2,9 @@ use clap::Parser;
 use weather::{
     fetch_weather_data,
     tts::{
+        AnnouncementFormat, AudioFormat, TtsBackend, TtsPlayer,
         espeak::{EspeakTts, EspeakVoice},
-        generate_weather_announcement, AnnouncementFormat, AudioFormat, TtsBackend, TtsPlayer,
+        generate_weather_announcement,
     },
 };
 

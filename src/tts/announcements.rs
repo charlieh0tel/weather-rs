@@ -1,4 +1,4 @@
-use crate::{celsius_to_fahrenheit, expand_abbreviations, parse_wmo_codes, MetarData};
+use crate::{MetarData, celsius_to_fahrenheit, expand_abbreviations, parse_wmo_codes};
 
 #[derive(Debug, Clone)]
 pub enum AnnouncementFormat {

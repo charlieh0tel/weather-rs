@@ -20,9 +20,17 @@ impl fmt::Display for WeatherError {
         match self {
             WeatherError::HttpClient(msg) => write!(f, "HTTP client error: {}", msg),
             WeatherError::Request(msg) => write!(f, "Request failed: {}", msg),
-            WeatherError::EmptyResponse(icao) => write!(f, "Empty response from API. ICAO code '{}' may not be valid or may not have current weather data. Try adding 'K' prefix for US airports (e.g., KRHV)", icao),
+            WeatherError::EmptyResponse(icao) => write!(
+                f,
+                "Empty response from API. ICAO code '{}' may not be valid or may not have current weather data. Try adding 'K' prefix for US airports (e.g., KRHV)",
+                icao
+            ),
             WeatherError::InvalidJson(msg) => write!(f, "Failed to parse JSON response: {}", msg),
-            WeatherError::NoData(icao) => write!(f, "No weather data found for ICAO: {}. This airport may not report METAR data or may not be a valid ICAO identifier.\nCommon reasons:\n- Small airports may not have weather reporting\n- Try the full ICAO code (US airports: add 'K' prefix, e.g., KRHV)\n- Verify the airport code at https://aviationweather.gov", icao),
+            WeatherError::NoData(icao) => write!(
+                f,
+                "No weather data found for ICAO: {}. This airport may not report METAR data or may not be a valid ICAO identifier.\nCommon reasons:\n- Small airports may not have weather reporting\n- Try the full ICAO code (US airports: add 'K' prefix, e.g., KRHV)\n- Verify the airport code at https://aviationweather.gov",
+                icao
+            ),
         }
     }
 }

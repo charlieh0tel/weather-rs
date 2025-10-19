@@ -82,12 +82,8 @@ impl TtsBackend for EspeakTts {
         use std::sync::Arc;
         use std::sync::Mutex;
 
-        if !matches!(format, AudioFormat::Wav) {
-            return Err(TtsError::AudioConversionError(format!(
-                "{} format not supported by eSpeak. Use WAV format.",
-                format
-            )));
-        }
+        // eSpeak natively supports only WAV, but we can convert to other formats
+        let needs_conversion = !matches!(format, AudioFormat::Wav);
 
         let c_text = CString::new(text)
             .map_err(|e| TtsError::SynthesisError(format!("Invalid text: {}", e)))?;
@@ -118,12 +114,14 @@ impl TtsBackend for EspeakTts {
                 numsamples: i32,
                 _events: *mut espeak_EVENT,
             ) -> i32 {
-                if let Some(ref buffer_arc) = AUDIO_BUFFER_PTR {
-                    if !wav.is_null() && numsamples > 0 {
-                        if let Ok(mut buffer) = buffer_arc.lock() {
-                            let samples = std::slice::from_raw_parts(wav, numsamples as usize);
-                            buffer.extend_from_slice(samples);
-                        }
+                unsafe {
+                    if let Some(ref buffer_arc) = AUDIO_BUFFER_PTR
+                        && !wav.is_null()
+                        && numsamples > 0
+                        && let Ok(mut buffer) = buffer_arc.lock()
+                    {
+                        let samples = std::slice::from_raw_parts(wav, numsamples as usize);
+                        buffer.extend_from_slice(samples);
                     }
                 }
                 0 // Continue
@@ -198,7 +196,14 @@ impl TtsBackend for EspeakTts {
                     .map_err(|e| TtsError::FileError(format!("Failed to finalize WAV: {}", e)))?;
             }
 
-            Ok(cursor.into_inner())
+            let wav_data = cursor.into_inner();
+
+            // Convert to requested format if needed using centralized conversion
+            if needs_conversion {
+                crate::tts::TtsPlayer::convert_audio_format(&wav_data, &AudioFormat::Wav, format)
+            } else {
+                Ok(wav_data)
+            }
         }
     }
 

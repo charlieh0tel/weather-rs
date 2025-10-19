@@ -2,10 +2,11 @@ use std::error::Error;
 use std::fmt;
 
 pub mod announcements;
+pub mod audio_conversion;
 pub mod espeak;
 pub mod google_tts;
 
-pub use announcements::{generate_weather_announcement, AnnouncementFormat};
+pub use announcements::{AnnouncementFormat, generate_weather_announcement};
 
 #[derive(Debug, Clone)]
 pub enum AudioFormat {
@@ -106,6 +107,30 @@ impl TtsPlayer {
 
         println!("Audio saved to: {}", file_path);
         Ok(())
+    }
+
+    /// Convert audio data from one format to another
+    /// This centralizes all audio conversion logic
+    pub fn convert_audio_format(
+        audio_data: &[u8],
+        from_format: &AudioFormat,
+        to_format: &AudioFormat,
+    ) -> Result<Vec<u8>, TtsError> {
+        // If formats are the same, no conversion needed
+        if std::mem::discriminant(from_format) == std::mem::discriminant(to_format) {
+            return Ok(audio_data.to_vec());
+        }
+
+        // Currently we only support WAV -> GSM conversion
+        match (from_format, to_format) {
+            (AudioFormat::Wav, AudioFormat::Gsm) => {
+                crate::tts::audio_conversion::convert_wav_to_gsm(audio_data)
+            }
+            _ => Err(TtsError::AudioConversionError(format!(
+                "Conversion from {} to {} is not yet supported",
+                from_format, to_format
+            ))),
+        }
     }
 
     pub fn play_audio(audio_data: &[u8], format: &AudioFormat) -> Result<(), TtsError> {
