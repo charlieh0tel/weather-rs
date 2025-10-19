@@ -67,3 +67,6 @@ S.=South
 E.=East
 W.=West
 Co.=County
+
+# Common
+Arpt=Airport
