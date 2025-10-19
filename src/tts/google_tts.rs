@@ -95,6 +95,8 @@ struct TtsVoice {
 struct AudioConfig {
     #[serde(rename = "audioEncoding")]
     audio_encoding: String,
+    #[serde(rename = "sampleRateHertz")]
+    sample_rate_hertz: u32,
 }
 
 #[derive(Deserialize)]
@@ -114,6 +116,12 @@ impl TtsBackend for GoogleTts {
 
         let encoding = self.audio_format_to_google_encoding(google_format)?;
 
+        // Use 8kHz for telephony formats (µ-law, A-law, GSM), 22kHz for others
+        let sample_rate = match google_format {
+            AudioFormat::Mulaw | AudioFormat::Alaw | AudioFormat::Gsm => 8000,
+            _ => 22050, // Google TTS default
+        };
+
         let request = TtsRequest {
             input: TtsInput {
                 text: text.to_string(),
@@ -124,6 +132,7 @@ impl TtsBackend for GoogleTts {
             },
             audio_config: AudioConfig {
                 audio_encoding: encoding.to_string(),
+                sample_rate_hertz: sample_rate,
             },
         };
 
