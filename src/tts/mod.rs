@@ -30,8 +30,8 @@ pub enum AudioFormat {
     Wav,
     /// OGG format
     Ogg,
-    /// MULAW format (8-bit G.711)
-    Mulaw,
+    /// ULAW format (8-bit G.711)
+    Ulaw,
     /// ALAW format (8-bit G.711)
     Alaw,
     /// GSM format (telephony)
@@ -44,7 +44,7 @@ impl AudioFormat {
             AudioFormat::Mp3 => "mp3",
             AudioFormat::Wav => "wav",
             AudioFormat::Ogg => "ogg",
-            AudioFormat::Mulaw => "wav",
+            AudioFormat::Ulaw => "wav",
             AudioFormat::Alaw => "wav",
             AudioFormat::Gsm => "gsm",
         }
@@ -61,7 +61,7 @@ impl fmt::Display for AudioFormat {
             AudioFormat::Mp3 => "MP3",
             AudioFormat::Wav => "WAV",
             AudioFormat::Ogg => "OGG",
-            AudioFormat::Mulaw => "MULAW",
+            AudioFormat::Ulaw => "ULAW",
             AudioFormat::Alaw => "ALAW",
             AudioFormat::Gsm => "GSM",
         };

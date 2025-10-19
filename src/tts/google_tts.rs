@@ -61,7 +61,7 @@ impl GoogleTts {
             AudioFormat::Mp3 => Ok("MP3"),
             AudioFormat::Wav => Ok("LINEAR16"),
             AudioFormat::Ogg => Ok("OGG_OPUS"),
-            AudioFormat::Mulaw => Ok("MULAW"),
+            AudioFormat::Ulaw => Ok("MULAW"),
             AudioFormat::Alaw => Ok("ALAW"),
             AudioFormat::Gsm => Err(TtsError::AudioConversionError(
                 "GSM format not directly supported by Google TTS. Use WAV and convert to GSM."
@@ -118,7 +118,7 @@ impl TtsBackend for GoogleTts {
 
         // Use 8kHz for telephony formats (µ-law, A-law, GSM), 22kHz for others
         let sample_rate = match google_format {
-            AudioFormat::Mulaw | AudioFormat::Alaw | AudioFormat::Gsm => 8000,
+            AudioFormat::Ulaw | AudioFormat::Alaw | AudioFormat::Gsm => 8000,
             _ => 22050, // Google TTS default
         };
 

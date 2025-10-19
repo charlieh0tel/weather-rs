@@ -102,4 +102,4 @@ fn try_sox_conversion(wav_data: &[u8]) -> Result<Vec<u8>, String> {
 
 // Future: Add more conversion functions
 // pub fn convert_wav_to_alaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError>
-// pub fn convert_wav_to_mulaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError>
+// pub fn convert_wav_to_ulaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError>
