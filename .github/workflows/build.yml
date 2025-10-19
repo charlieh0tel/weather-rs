@@ -1,0 +1,90 @@
+name: Build and Release
+
+on: push
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: weather-rs-linux-x86_64
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: weather-rs-linux-aarch64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            llvm-dev \
+            libclang-dev \
+            libasound2-dev \
+            libespeak-ng-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+
+      - name: Install aarch64 cross-compiler
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+          
+      - name: Build executable
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: target/${{ matrix.target }}/release/*
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        
+      - name: List before
+        run: ls -RF
+
+#      - name: Rename and consolidate artifacts
+#        run: |
+#          mkdir release_assets
+#          cp -p ./weather-rs-linux-aarch64/ut325f "release_assets/ut325f-linux-aarch64-${{ github.ref_name }}"
+#          cp -p ./ut325f-linux-x86_64/ut325f "release_assets/ut325f-linux-x86_64-${{ github.ref_name }}"
+#	  cp -p target/${{ matrix.target }}/release/weather
+#	    	    target/${{ matrix.target }}/release/speak-weather-espeak
+#	    target/${{ matrix.target }}/release/speak-weather-google-tts
+
+
+      - name: List after
+        run: ls -RF
+
+      - name: List release assets
+        run: cd release_assets && ls -lF
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release_assets/*
