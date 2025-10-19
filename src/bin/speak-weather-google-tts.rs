@@ -16,7 +16,7 @@ struct Args {
 
     /// Output format for announcement
     #[arg(short, long, value_enum, default_value = "speech")]
-    format: OutputFormat,
+    format: AnnouncementFormat,
 
     /// Save audio to file instead of speaking
     #[arg(short, long)]
@@ -29,29 +29,6 @@ struct Args {
     /// Audio format for output
     #[arg(short = 'a', long, value_enum, default_value = "mp3")]
     audio_format: AudioFormatArg,
-}
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum OutputFormat {
-    /// Direct speech output
-    Speech,
-    /// Brief announcement format
-    Brief,
-    /// Detailed weather report
-    Detailed,
-    /// Aviation radio style
-    Aviation,
-}
-
-impl From<OutputFormat> for AnnouncementFormat {
-    fn from(format: OutputFormat) -> Self {
-        match format {
-            OutputFormat::Speech => AnnouncementFormat::Speech,
-            OutputFormat::Brief => AnnouncementFormat::Brief,
-            OutputFormat::Detailed => AnnouncementFormat::Detailed,
-            OutputFormat::Aviation => AnnouncementFormat::Aviation,
-        }
-    }
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -122,7 +99,7 @@ fn main() {
         }
     };
 
-    let announcement = generate_weather_announcement(&metar, &args.format.into());
+    let announcement = generate_weather_announcement(&metar, &args.format);
     println!("Announcement text: {}\n", announcement);
 
     // Get Google Cloud API key from environment

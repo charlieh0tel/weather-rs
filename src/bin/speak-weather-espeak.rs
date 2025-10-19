@@ -17,7 +17,7 @@ struct Args {
 
     /// Output format for announcement
     #[arg(short, long, value_enum, default_value = "speech")]
-    format: OutputFormat,
+    format: AnnouncementFormat,
 
     /// Save audio to file instead of speaking
     #[arg(short, long)]
@@ -42,29 +42,6 @@ struct Args {
     /// Gap between words in 10ms units
     #[arg(short = 'g', long, default_value = "15")]
     gap: u32,
-}
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum OutputFormat {
-    /// Direct speech output
-    Speech,
-    /// Brief announcement format
-    Brief,
-    /// Detailed weather report
-    Detailed,
-    /// Aviation radio style
-    Aviation,
-}
-
-impl From<OutputFormat> for AnnouncementFormat {
-    fn from(format: OutputFormat) -> Self {
-        match format {
-            OutputFormat::Speech => AnnouncementFormat::Speech,
-            OutputFormat::Brief => AnnouncementFormat::Brief,
-            OutputFormat::Detailed => AnnouncementFormat::Detailed,
-            OutputFormat::Aviation => AnnouncementFormat::Aviation,
-        }
-    }
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -139,7 +116,7 @@ fn main() {
         }
     };
 
-    let announcement = generate_weather_announcement(&metar, &args.format.into());
+    let announcement = generate_weather_announcement(&metar, &args.format);
     println!("Announcement text: {}\n", announcement);
 
     let voice = create_espeak_voice(args.voice, args.speed, args.pitch, args.gap);

@@ -1,6 +1,6 @@
 use crate::{MetarData, celsius_to_fahrenheit, expand_abbreviations, parse_wmo_codes};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, clap::ValueEnum)]
 pub enum AnnouncementFormat {
     /// Direct speech output
     Speech,
