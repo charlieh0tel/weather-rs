@@ -174,3 +174,25 @@ impl TtsPlayer {
         Ok(())
     }
 }
+
+pub fn execute_tts_output<T: TtsBackend>(
+    tts: &T,
+    announcement: &str,
+    output_path: Option<String>,
+    audio_format: &AudioFormat,
+) -> Result<(), TtsError> {
+    if output_path.is_some() {
+        println!("Generating audio file...");
+    } else {
+        println!("Speaking weather...");
+    }
+
+    if let Some(path) = output_path {
+        let audio_data = tts.synthesize(announcement, audio_format)?;
+        TtsPlayer::save_audio_file(&audio_data, &path, audio_format)?;
+    } else {
+        tts.speak(announcement)?;
+    }
+
+    Ok(())
+}

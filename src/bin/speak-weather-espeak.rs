@@ -2,9 +2,9 @@ use clap::Parser;
 use weather::{
     fetch_weather_data,
     tts::{
-        AnnouncementFormat, AudioFormat, TtsBackend, TtsPlayer, Voice,
+        AnnouncementFormat, AudioFormat, Voice,
         espeak::{EspeakTts, EspeakVoice},
-        generate_weather_announcement,
+        execute_tts_output, generate_weather_announcement,
     },
 };
 
@@ -76,34 +76,8 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let audio_format = args.audio_format;
-
-    if args.output.is_some() {
-        println!("Generating audio file...");
-    } else {
-        println!("Speaking weather...");
-    }
-
-    // Handle output
-    if let Some(output_path) = args.output {
-        // File output mode - synthesize audio data
-        let audio_data = match tts.synthesize(&announcement, &audio_format) {
-            Ok(data) => data,
-            Err(e) => {
-                eprintln!("TTS Error: {}", e);
-                std::process::exit(1);
-            }
-        };
-
-        if let Err(e) = TtsPlayer::save_audio_file(&audio_data, &output_path, &audio_format) {
-            eprintln!("File Error: {}", e);
-            std::process::exit(1);
-        }
-    } else {
-        // Speaking mode - use direct speech
-        if let Err(e) = tts.speak(&announcement) {
-            eprintln!("TTS Error: {}", e);
-            std::process::exit(1);
-        }
+    if let Err(e) = execute_tts_output(&tts, &announcement, args.output, &args.audio_format) {
+        eprintln!("TTS Error: {}", e);
+        std::process::exit(1);
     }
 }
