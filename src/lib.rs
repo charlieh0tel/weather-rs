@@ -2,6 +2,8 @@ use serde::Deserialize;
 use std::fmt;
 
 mod abbreviations;
+pub mod tts;
+
 pub use abbreviations::expand_abbreviations;
 
 #[derive(Debug)]
@@ -202,7 +204,10 @@ pub fn fetch_weather_data(icao: &str) -> Result<MetarData> {
         return Err(WeatherError::NoData(icao.to_uppercase()));
     }
 
-    Ok(response.into_iter().next().unwrap())
+    response
+        .into_iter()
+        .next()
+        .ok_or_else(|| WeatherError::NoData(icao.to_uppercase()))
 }
 
 pub fn display_weather(metar: &MetarData) {

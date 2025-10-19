@@ -1,0 +1,257 @@
+use crate::tts::{AudioFormat, TtsBackend, TtsError};
+
+// eSpeak audio output mode constants
+const AUDIO_OUTPUT_PLAYBACK: u32 = 0;
+const AUDIO_OUTPUT_RETRIEVAL: u32 = 1;
+#[allow(dead_code)]
+const AUDIO_OUTPUT_SYNCHRONOUS: u32 = 2;
+#[allow(dead_code)]
+const AUDIO_OUTPUT_SYNTH_CALLBACK: u32 = 3;
+
+// eSpeak parameter constants
+const ESPEAK_PARAM_RATE: u32 = 1;
+const ESPEAK_PARAM_PITCH: u32 = 2;
+const ESPEAK_PARAM_WORDGAP: u32 = 4;
+
+#[derive(Debug, Clone)]
+pub struct EspeakVoice {
+    pub speed: u32,
+    pub pitch: u32,
+    pub gap: u32,
+}
+
+impl Default for EspeakVoice {
+    fn default() -> Self {
+        Self {
+            speed: 120,
+            pitch: 50,
+            gap: 15,
+        }
+    }
+}
+
+impl EspeakVoice {
+    pub fn us_female() -> Self {
+        Self {
+            speed: 120,
+            pitch: 60,
+            gap: 15,
+        }
+    }
+
+    pub fn us_male() -> Self {
+        Self {
+            speed: 120,
+            pitch: 40,
+            gap: 15,
+        }
+    }
+
+    pub fn uk_female() -> Self {
+        Self {
+            speed: 110,
+            pitch: 55,
+            gap: 20,
+        }
+    }
+
+    pub fn uk_male() -> Self {
+        Self {
+            speed: 110,
+            pitch: 35,
+            gap: 20,
+        }
+    }
+}
+
+pub struct EspeakTts {
+    voice: EspeakVoice,
+}
+
+impl EspeakTts {
+    pub fn new(voice: EspeakVoice) -> Result<Self, TtsError> {
+        Ok(Self { voice })
+    }
+}
+
+impl TtsBackend for EspeakTts {
+    fn synthesize(&self, text: &str, format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
+        use espeakng_sys::*;
+        use std::ffi::CString;
+        use std::io::Cursor;
+        use std::sync::Arc;
+        use std::sync::Mutex;
+
+        if !matches!(format, AudioFormat::Wav) {
+            return Err(TtsError::AudioConversionError(format!(
+                "{} format not supported by eSpeak. Use WAV format.",
+                format
+            )));
+        }
+
+        let c_text = CString::new(text)
+            .map_err(|e| TtsError::SynthesisError(format!("Invalid text: {}", e)))?;
+
+        unsafe {
+            // Initialize eSpeak for audio capture only (no playback)
+            let sample_rate = espeak_Initialize(AUDIO_OUTPUT_RETRIEVAL, 0, std::ptr::null(), 0);
+
+            if sample_rate == -1 {
+                return Err(TtsError::SynthesisError(
+                    "Failed to initialize eSpeak".to_string(),
+                ));
+            }
+
+            // Set voice parameters
+            espeak_SetParameter(ESPEAK_PARAM_RATE, self.voice.speed as i32, 0);
+            espeak_SetParameter(ESPEAK_PARAM_PITCH, self.voice.pitch as i32, 0);
+            espeak_SetParameter(ESPEAK_PARAM_WORDGAP, self.voice.gap as i32, 0);
+
+            // Global storage for the buffer during callback
+            static mut AUDIO_BUFFER_PTR: Option<Arc<Mutex<Vec<i16>>>> = None;
+            let samples_buffer = Arc::new(Mutex::new(Vec::new()));
+            AUDIO_BUFFER_PTR = Some(samples_buffer.clone());
+
+            // Audio callback function
+            unsafe extern "C" fn synthesis_callback(
+                wav: *mut i16,
+                numsamples: i32,
+                _events: *mut espeak_EVENT,
+            ) -> i32 {
+                if let Some(ref buffer_arc) = AUDIO_BUFFER_PTR {
+                    if !wav.is_null() && numsamples > 0 {
+                        if let Ok(mut buffer) = buffer_arc.lock() {
+                            let samples = std::slice::from_raw_parts(wav, numsamples as usize);
+                            buffer.extend_from_slice(samples);
+                        }
+                    }
+                }
+                0 // Continue
+            }
+
+            // Clear buffer and set callback
+            if let Ok(mut buffer) = samples_buffer.lock() {
+                buffer.clear();
+            }
+            espeak_SetSynthCallback(Some(synthesis_callback));
+
+            // Synthesize text
+            let result = espeak_Synth(
+                c_text.as_ptr() as *const std::os::raw::c_void,
+                text.len(),
+                0,
+                0, // POS_CHARACTER
+                0,
+                0, // flags
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+
+            if result == 1 {
+                espeak_Terminate();
+                return Err(TtsError::SynthesisError(
+                    "eSpeak synthesis failed".to_string(),
+                ));
+            }
+
+            // Wait for synthesis to complete
+            espeak_Synchronize();
+
+            // Get the audio samples
+            let audio_samples = samples_buffer
+                .lock()
+                .map_err(|_| TtsError::SynthesisError("Failed to lock audio buffer".to_string()))?
+                .clone();
+
+            // Clean up
+            AUDIO_BUFFER_PTR = None;
+            espeak_Terminate();
+
+            if audio_samples.is_empty() {
+                return Err(TtsError::SynthesisError(
+                    "No audio data generated by eSpeak".to_string(),
+                ));
+            }
+
+            // Create WAV file using hound
+            let spec = hound::WavSpec {
+                channels: 1,
+                sample_rate: sample_rate as u32,
+                bits_per_sample: 16,
+                sample_format: hound::SampleFormat::Int,
+            };
+
+            let mut cursor = Cursor::new(Vec::new());
+            {
+                let mut writer = hound::WavWriter::new(&mut cursor, spec).map_err(|e| {
+                    TtsError::FileError(format!("Failed to create WAV writer: {}", e))
+                })?;
+
+                for sample in &audio_samples {
+                    writer.write_sample(*sample).map_err(|e| {
+                        TtsError::FileError(format!("Failed to write sample: {}", e))
+                    })?;
+                }
+
+                writer
+                    .finalize()
+                    .map_err(|e| TtsError::FileError(format!("Failed to finalize WAV: {}", e)))?;
+            }
+
+            Ok(cursor.into_inner())
+        }
+    }
+
+    fn speak(&self, text: &str) -> Result<(), TtsError> {
+        use espeakng_sys::*;
+        use std::ffi::CString;
+
+        let c_text = CString::new(text)
+            .map_err(|e| TtsError::SynthesisError(format!("Invalid text: {}", e)))?;
+
+        unsafe {
+            // Initialize eSpeak for playback
+            let sample_rate = espeak_Initialize(AUDIO_OUTPUT_PLAYBACK, 0, std::ptr::null(), 0);
+
+            if sample_rate == -1 {
+                return Err(TtsError::SynthesisError(
+                    "Failed to initialize eSpeak".to_string(),
+                ));
+            }
+
+            // Set voice parameters
+            espeak_SetParameter(ESPEAK_PARAM_RATE, self.voice.speed as i32, 0);
+            espeak_SetParameter(ESPEAK_PARAM_PITCH, self.voice.pitch as i32, 0);
+            espeak_SetParameter(ESPEAK_PARAM_WORDGAP, self.voice.gap as i32, 0);
+
+            // Synthesize and speak
+            let result = espeak_Synth(
+                c_text.as_ptr() as *const std::os::raw::c_void,
+                text.len(),
+                0,
+                0, // POS_CHARACTER
+                0,
+                0, // flags
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+
+            if result == 1 {
+                espeak_Terminate();
+                return Err(TtsError::SynthesisError(
+                    "eSpeak synthesis failed".to_string(),
+                ));
+            }
+
+            // Wait for speech to complete
+            espeak_Synchronize();
+            espeak_Terminate();
+
+            Ok(())
+        }
+    }
+
+    fn backend_name(&self) -> &str {
+        "eSpeak-NG"
+    }
+}
