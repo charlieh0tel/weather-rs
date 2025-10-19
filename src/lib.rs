@@ -1,6 +1,9 @@
 use serde::Deserialize;
 use std::fmt;
 
+mod abbreviations;
+pub use abbreviations::expand_abbreviations;
+
 #[derive(Debug)]
 pub enum WeatherError {
     HttpClient(String),
