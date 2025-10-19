@@ -1,4 +1,4 @@
-use crate::tts::{AudioFormat, TtsBackend, TtsError};
+use crate::tts::{AudioFormat, TtsBackend, TtsError, Voice};
 
 // eSpeak audio output mode constants
 const AUDIO_OUTPUT_PLAYBACK: u32 = 0;
@@ -60,6 +60,18 @@ impl EspeakVoice {
             speed: 110,
             pitch: 35,
             gap: 20,
+        }
+    }
+}
+
+impl From<Voice> for EspeakVoice {
+    fn from(voice: Voice) -> Self {
+        match voice {
+            Voice::Default => EspeakVoice::default(),
+            Voice::UsFemale => EspeakVoice::us_female(),
+            Voice::UsMale => EspeakVoice::us_male(),
+            Voice::UkFemale => EspeakVoice::uk_female(),
+            Voice::UkMale => EspeakVoice::uk_male(),
         }
     }
 }

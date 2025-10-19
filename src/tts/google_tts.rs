@@ -1,4 +1,4 @@
-use crate::tts::{AudioFormat, TtsBackend, TtsError};
+use crate::tts::{AudioFormat, TtsBackend, TtsError, Voice};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +30,18 @@ impl GoogleVoice {
         match self {
             GoogleVoice::Default | GoogleVoice::UsFemale | GoogleVoice::UsMale => "en-US",
             GoogleVoice::UkFemale | GoogleVoice::UkMale => "en-GB",
+        }
+    }
+}
+
+impl From<Voice> for GoogleVoice {
+    fn from(voice: Voice) -> Self {
+        match voice {
+            Voice::Default => GoogleVoice::Default,
+            Voice::UsFemale => GoogleVoice::UsFemale,
+            Voice::UsMale => GoogleVoice::UsMale,
+            Voice::UkFemale => GoogleVoice::UkFemale,
+            Voice::UkMale => GoogleVoice::UkMale,
         }
     }
 }

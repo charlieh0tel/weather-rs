@@ -2,8 +2,8 @@ use clap::Parser;
 use weather::{
     fetch_weather_data,
     tts::{
-        AnnouncementFormat, AudioFormat, TtsBackend, TtsPlayer, generate_weather_announcement,
-        google_tts::{GoogleTts, GoogleVoice},
+        AnnouncementFormat, AudioFormat, TtsBackend, TtsPlayer, Voice,
+        generate_weather_announcement, google_tts::GoogleTts,
     },
 };
 
@@ -24,66 +24,11 @@ struct Args {
 
     /// Voice to use for speech
     #[arg(short, long, value_enum, default_value = "default")]
-    voice: VoiceType,
+    voice: Voice,
 
     /// Audio format for output
     #[arg(short = 'a', long, value_enum, default_value = "mp3")]
-    audio_format: AudioFormatArg,
-}
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum VoiceType {
-    /// Default neural voice
-    Default,
-    /// US English female neural voice
-    UsFemale,
-    /// US English male neural voice
-    UsMale,
-    /// UK English female neural voice
-    UkFemale,
-    /// UK English male neural voice
-    UkMale,
-}
-
-impl From<VoiceType> for GoogleVoice {
-    fn from(voice: VoiceType) -> Self {
-        match voice {
-            VoiceType::Default => GoogleVoice::Default,
-            VoiceType::UsFemale => GoogleVoice::UsFemale,
-            VoiceType::UsMale => GoogleVoice::UsMale,
-            VoiceType::UkFemale => GoogleVoice::UkFemale,
-            VoiceType::UkMale => GoogleVoice::UkMale,
-        }
-    }
-}
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum AudioFormatArg {
-    /// MP3 format (best for playback)
-    Mp3,
-    /// WAV format (uncompressed)
-    Wav,
-    /// OGG format (open source)
-    Ogg,
-    /// MULAW format (8-bit G.711)
-    Mulaw,
-    /// ALAW format (8-bit G.711)
-    Alaw,
-    /// GSM format (telephony) - requires conversion
-    Gsm,
-}
-
-impl From<AudioFormatArg> for AudioFormat {
-    fn from(format: AudioFormatArg) -> Self {
-        match format {
-            AudioFormatArg::Mp3 => AudioFormat::Mp3,
-            AudioFormatArg::Wav => AudioFormat::Wav,
-            AudioFormatArg::Ogg => AudioFormat::Ogg,
-            AudioFormatArg::Mulaw => AudioFormat::Mulaw,
-            AudioFormatArg::Alaw => AudioFormat::Alaw,
-            AudioFormatArg::Gsm => AudioFormat::Gsm,
-        }
-    }
+    audio_format: AudioFormat,
 }
 
 fn main() {
@@ -114,7 +59,7 @@ fn main() {
     };
 
     let tts = GoogleTts::new(api_key, args.voice.into());
-    let audio_format = args.audio_format.into();
+    let audio_format = args.audio_format;
 
     if args.output.is_some() {
         println!("Generating audio file...");

@@ -2,7 +2,7 @@ use clap::Parser;
 use weather::{
     fetch_weather_data,
     tts::{
-        AnnouncementFormat, AudioFormat, TtsBackend, TtsPlayer,
+        AnnouncementFormat, AudioFormat, TtsBackend, TtsPlayer, Voice,
         espeak::{EspeakTts, EspeakVoice},
         generate_weather_announcement,
     },
@@ -25,11 +25,11 @@ struct Args {
 
     /// Voice to use for speech
     #[arg(short, long, value_enum, default_value = "default")]
-    voice: VoiceType,
+    voice: Voice,
 
     /// Audio format for output
     #[arg(short = 'a', long, value_enum, default_value = "wav")]
-    audio_format: AudioFormatArg,
+    audio_format: AudioFormat,
 
     /// Speech speed in words per minute
     #[arg(short, long, default_value = "120")]
@@ -44,63 +44,12 @@ struct Args {
     gap: u32,
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum VoiceType {
-    /// Default voice
-    Default,
-    /// US English female voice
-    UsFemale,
-    /// US English male voice
-    UsMale,
-    /// UK English female voice
-    UkFemale,
-    /// UK English male voice
-    UkMale,
-}
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum AudioFormatArg {
-    /// WAV format (native eSpeak output)
-    Wav,
-    /// MP3 format (requires conversion)
-    Mp3,
-    /// OGG format (requires conversion)
-    Ogg,
-    /// MULAW format (requires conversion)
-    Mulaw,
-    /// ALAW format (requires conversion)
-    Alaw,
-    /// GSM format (requires conversion)
-    Gsm,
-}
-
-impl From<AudioFormatArg> for AudioFormat {
-    fn from(format: AudioFormatArg) -> Self {
-        match format {
-            AudioFormatArg::Mp3 => AudioFormat::Mp3,
-            AudioFormatArg::Wav => AudioFormat::Wav,
-            AudioFormatArg::Ogg => AudioFormat::Ogg,
-            AudioFormatArg::Mulaw => AudioFormat::Mulaw,
-            AudioFormatArg::Alaw => AudioFormat::Alaw,
-            AudioFormatArg::Gsm => AudioFormat::Gsm,
-        }
-    }
-}
-
-fn create_espeak_voice(voice_type: VoiceType, speed: u32, pitch: u32, gap: u32) -> EspeakVoice {
-    let mut voice = match voice_type {
-        VoiceType::Default => EspeakVoice::default(),
-        VoiceType::UsFemale => EspeakVoice::us_female(),
-        VoiceType::UsMale => EspeakVoice::us_male(),
-        VoiceType::UkFemale => EspeakVoice::uk_female(),
-        VoiceType::UkMale => EspeakVoice::uk_male(),
-    };
-
-    voice.speed = speed;
-    voice.pitch = pitch;
-    voice.gap = gap;
-
-    voice
+fn create_espeak_voice(voice: Voice, speed: u32, pitch: u32, gap: u32) -> EspeakVoice {
+    let mut espeak_voice: EspeakVoice = voice.into();
+    espeak_voice.speed = speed;
+    espeak_voice.pitch = pitch;
+    espeak_voice.gap = gap;
+    espeak_voice
 }
 
 fn main() {
@@ -127,7 +76,7 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let audio_format = args.audio_format.into();
+    let audio_format = args.audio_format;
 
     if args.output.is_some() {
         println!("Generating audio file...");

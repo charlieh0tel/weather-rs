@@ -8,7 +8,21 @@ pub mod google_tts;
 
 pub use announcements::{AnnouncementFormat, generate_weather_announcement};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, clap::ValueEnum)]
+pub enum Voice {
+    /// Default voice
+    Default,
+    /// US English female voice
+    UsFemale,
+    /// US English male voice
+    UsMale,
+    /// UK English female voice
+    UkFemale,
+    /// UK English male voice
+    UkMale,
+}
+
+#[derive(Debug, Clone, clap::ValueEnum)]
 pub enum AudioFormat {
     /// MP3 format
     Mp3,
