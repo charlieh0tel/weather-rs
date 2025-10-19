@@ -1,5 +1,5 @@
-use aviation_weather::{display_weather, fetch_weather_data};
 use clap::Parser;
+use weather::{display_weather, fetch_weather_data};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Fetch aviation weather from aviationweather.gov", long_about = None)]

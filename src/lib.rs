@@ -167,15 +167,10 @@ pub fn celsius_to_fahrenheit(c: f64) -> f64 {
 }
 
 pub fn parse_wmo_codes(wx_string: &str) -> Vec<WmoCode> {
-    let mut found = Vec::new();
-
-    for code in WmoCode::all_codes() {
-        if wx_string.contains(code.code()) {
-            found.push(code);
-        }
-    }
-
-    found
+    WmoCode::all_codes()
+        .into_iter()
+        .filter(|code| wx_string.contains(code.code()))
+        .collect()
 }
 
 pub fn fetch_weather_data(icao: &str) -> Result<MetarData> {

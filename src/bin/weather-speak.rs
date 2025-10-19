@@ -1,9 +1,10 @@
-use aviation_weather::{
+use base64::Engine;
+use clap::Parser;
+use serde::{Deserialize, Serialize};
+use std::io::Cursor;
+use weather::{
     celsius_to_fahrenheit, expand_abbreviations, fetch_weather_data, parse_wmo_codes, MetarData,
 };
-use clap::Parser;
-use espeakng_sys::*;
-use std::ffi::CString;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Speak aviation weather from aviationweather.gov", long_about = None)]
@@ -19,6 +20,14 @@ struct Args {
     /// Save audio to file instead of speaking
     #[arg(short, long)]
     output: Option<String>,
+
+    /// Voice to use for speech
+    #[arg(short, long, value_enum, default_value = "default")]
+    voice: VoiceType,
+
+    /// Audio format for output
+    #[arg(short = 'a', long, value_enum, default_value = "mp3")]
+    audio_format: AudioFormat,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -31,6 +40,183 @@ enum OutputFormat {
     Detailed,
     /// Aviation radio style
     Aviation,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum VoiceType {
+    /// Default neural voice
+    Default,
+    /// US English female neural voice
+    UsFemale,
+    /// US English male neural voice
+    UsMale,
+    /// UK English female neural voice
+    UkFemale,
+    /// UK English male neural voice
+    UkMale,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum AudioFormat {
+    /// MP3 format (best for playback)
+    Mp3,
+    /// WAV format (uncompressed)
+    Wav,
+    /// OGG format (open source)
+    Ogg,
+    /// MULAW format (8-bit G.711)
+    Mulaw,
+    /// ALAW format (8-bit G.711)
+    Alaw,
+}
+
+impl VoiceType {
+    fn google_voice_name(&self) -> &str {
+        match self {
+            VoiceType::Default | VoiceType::UsFemale => "en-US-Neural2-F",
+            VoiceType::UsMale => "en-US-Neural2-D",
+            VoiceType::UkFemale => "en-GB-Neural2-A",
+            VoiceType::UkMale => "en-GB-Neural2-B",
+        }
+    }
+
+    fn language_code(&self) -> &str {
+        match self {
+            VoiceType::Default | VoiceType::UsFemale | VoiceType::UsMale => "en-US",
+            VoiceType::UkFemale | VoiceType::UkMale => "en-GB",
+        }
+    }
+}
+
+impl AudioFormat {
+    fn google_encoding(&self) -> &str {
+        match self {
+            AudioFormat::Mp3 => "MP3",
+            AudioFormat::Wav => "LINEAR16",
+            AudioFormat::Ogg => "OGG_OPUS",
+            AudioFormat::Mulaw => "MULAW",
+            AudioFormat::Alaw => "ALAW",
+        }
+    }
+
+    fn file_extension(&self) -> &str {
+        match self {
+            AudioFormat::Mp3 => "mp3",
+            AudioFormat::Wav => "wav",
+            AudioFormat::Ogg => "ogg",
+            AudioFormat::Mulaw => "wav",
+            AudioFormat::Alaw => "wav",
+        }
+    }
+
+    fn supports_playback(&self) -> bool {
+        match self {
+            AudioFormat::Mp3 | AudioFormat::Wav | AudioFormat::Ogg => true,
+            AudioFormat::Mulaw | AudioFormat::Alaw => false, // Compressed formats typically not supported by rodio for direct playback
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct TtsRequest {
+    input: TtsInput,
+    voice: TtsVoice,
+    #[serde(rename = "audioConfig")]
+    audio_config: AudioConfig,
+}
+
+#[derive(Serialize)]
+struct TtsInput {
+    text: String,
+}
+
+#[derive(Serialize)]
+struct TtsVoice {
+    #[serde(rename = "languageCode")]
+    language_code: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+struct AudioConfig {
+    #[serde(rename = "audioEncoding")]
+    audio_encoding: String,
+}
+
+#[derive(Deserialize)]
+struct TtsResponse {
+    #[serde(rename = "audioContent")]
+    audio_content: String,
+}
+
+fn speak_with_google_tts(
+    text: &str,
+    voice: &VoiceType,
+    audio_format: &AudioFormat,
+    api_key: &str,
+    output_file: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let request = TtsRequest {
+        input: TtsInput {
+            text: text.to_string(),
+        },
+        voice: TtsVoice {
+            language_code: voice.language_code().to_string(),
+            name: voice.google_voice_name().to_string(),
+        },
+        audio_config: AudioConfig {
+            audio_encoding: audio_format.google_encoding().to_string(),
+        },
+    };
+
+    let client = reqwest::blocking::Client::new();
+    let url = format!(
+        "https://texttospeech.googleapis.com/v1/text:synthesize?key={}",
+        api_key
+    );
+
+    let response = client.post(&url).json(&request).send()?;
+
+    if !response.status().is_success() {
+        let error_text = response.text()?;
+        return Err(format!("Google TTS API error: {}", error_text).into());
+    }
+
+    let tts_response: TtsResponse = response.json()?;
+    let audio_data =
+        base64::engine::general_purpose::STANDARD.decode(&tts_response.audio_content)?;
+
+    // Handle output file or playback
+    if let Some(output_path) = output_file {
+        // Save to file
+        let file_path = if output_path.contains('.') {
+            output_path.to_string()
+        } else {
+            format!("{}.{}", output_path, audio_format.file_extension())
+        };
+
+        std::fs::write(&file_path, &audio_data)?;
+        println!("Audio saved to: {}", file_path);
+    } else {
+        // Play audio (if format supports playback)
+        if audio_format.supports_playback() {
+            let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
+            let sink = rodio::Sink::try_new(&stream_handle)?;
+
+            let cursor = Cursor::new(audio_data);
+            let source = rodio::Decoder::new(cursor)?;
+            sink.append(source);
+            sink.sleep_until_end();
+        } else {
+            println!(
+                "Note: {} format does not support direct playback. Use --output to save to file.",
+                audio_format.google_encoding()
+            );
+            return Err("Format does not support playback".into());
+        }
+    }
+
+    Ok(())
 }
 
 fn spell_out_icao(icao: &str) -> String {
@@ -166,63 +352,31 @@ fn main() {
     let announcement = generate_weather_announcement(&metar, &args.format);
     println!("Announcement text: {}\n", announcement);
 
-    if let Some(output_file) = args.output {
-        println!("Saving audio to: {}", output_file);
-        // TODO: Implement audio file saving
-        println!("Note: Audio file saving not yet implemented");
+    // Get Google Cloud API key from environment
+    let api_key = match std::env::var("GOOGLE_CLOUD_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("Error: GOOGLE_CLOUD_API_KEY environment variable not set");
+            eprintln!("Please set your Google Cloud TTS API key:");
+            eprintln!("export GOOGLE_CLOUD_API_KEY=your_api_key_here");
+            std::process::exit(1);
+        }
+    };
+
+    if args.output.is_some() {
+        println!("Generating audio file...");
     } else {
         println!("Speaking weather...");
+    }
 
-        unsafe {
-            // Initialize eSpeak-ng
-            let result = espeak_Initialize(
-                espeak_AUDIO_OUTPUT_AUDIO_OUTPUT_PLAYBACK,
-                0,
-                std::ptr::null(),
-                0,
-            );
-
-            if result < 0 {
-                eprintln!("Failed to initialize eSpeak-ng");
-                std::process::exit(1);
-            }
-
-            // Set speech parameters for better quality
-            espeak_SetParameter(espeak_PARAMETER_espeakRATE, 140, 0); // 140 words per minute
-            espeak_SetParameter(espeak_PARAMETER_espeakPITCH, 50, 0); // Normal pitch
-            espeak_SetParameter(espeak_PARAMETER_espeakRANGE, 50, 0); // Pitch range
-
-            // Convert text to CString
-            let text_cstring = match CString::new(announcement) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Failed to convert text to CString: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            // Speak the text
-            let speak_result = espeak_Synth(
-                text_cstring.as_ptr() as *const std::os::raw::c_void,
-                text_cstring.as_bytes().len(),
-                0,
-                espeak_POSITION_TYPE_POS_CHARACTER,
-                0,
-                espeakCHARS_UTF8 | espeakSSML | espeakPHONEMES,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            );
-
-            if speak_result != espeak_ERROR_EE_OK {
-                eprintln!("eSpeak-ng synthesis failed");
-                std::process::exit(1);
-            }
-
-            // Wait for speech to complete
-            espeak_Synchronize();
-
-            // Cleanup
-            espeak_Terminate();
-        }
+    if let Err(e) = speak_with_google_tts(
+        &announcement,
+        &args.voice,
+        &args.audio_format,
+        &api_key,
+        args.output.as_deref(),
+    ) {
+        eprintln!("TTS Error: {}", e);
+        std::process::exit(1);
     }
 }
