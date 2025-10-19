@@ -1,0 +1,5 @@
+libssl-dev
+llvm-dev 
+libclang-dev 
+libasound2-dev 
+libespeak-ng-dev
