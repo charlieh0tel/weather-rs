@@ -19,17 +19,33 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+      - name: Update apt
+        run: |
+          sudo apt-get update -y
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update -y
           sudo apt-get install -y \
             llvm-dev \
             libclang-dev \
             libasound2-dev \
             libespeak-ng-dev
+
+      - name: Install aarch64 build dependencies
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo dpkg --add-architecture arm64 && \
+          sudo apt-get update && \
+          sudo apt-get install -y \
+            llvm-dev:arm64 \
+            libclang-dev:arm64 \
+            libasound2-dev:arm64 \
+            libespeak-ng-dev:arm64 \
+            libc6-dev:arm64 && \
+          sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -37,11 +53,6 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
 
-      - name: Install aarch64 cross-compiler
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-          
       - name: Build executable
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
