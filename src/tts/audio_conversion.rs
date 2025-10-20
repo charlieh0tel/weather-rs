@@ -24,7 +24,6 @@ fn convert_wav_to_telephony_format(
             "-t", sox_format, // Output format
             "-r", "8000", // 8kHz sample rate
             "-c", "1", // Mono
-            "-D", // No dithering
             "-", // Write to stdout
         ])
         .stdin(Stdio::piped())
