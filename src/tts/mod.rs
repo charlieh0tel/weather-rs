@@ -124,13 +124,9 @@ impl TtsPlayer {
     pub fn save_audio_file(
         audio_data: &[u8],
         output_path: &str,
-        format: &AudioFormat,
+        _format: &AudioFormat,
     ) -> Result<(), TtsError> {
-        let file_path = if output_path.contains('.') {
-            output_path.to_string()
-        } else {
-            format!("{}.{}", output_path, format.file_extension())
-        };
+        let file_path = output_path.to_string();
 
         std::fs::write(&file_path, audio_data)
             .map_err(|e| TtsError::FileError(format!("Failed to write {}: {}", file_path, e)))?;
