@@ -39,6 +39,22 @@ pub enum AudioFormat {
 }
 
 impl AudioFormat {
+    /// Get the appropriate sample rate for telephony compatibility
+    pub fn telephony_sample_rate(&self) -> u32 {
+        match self {
+            AudioFormat::Ulaw | AudioFormat::Alaw | AudioFormat::Gsm => 8000,
+            _ => 22050, // Standard quality for other formats
+        }
+    }
+
+    /// Check if this format requires telephony-compatible sample rate
+    pub fn is_telephony_format(&self) -> bool {
+        matches!(
+            self,
+            AudioFormat::Ulaw | AudioFormat::Alaw | AudioFormat::Gsm
+        )
+    }
+
     pub fn file_extension(&self) -> &str {
         match self {
             AudioFormat::Mp3 => "mp3",
@@ -135,10 +151,16 @@ impl TtsPlayer {
             return Ok(audio_data.to_vec());
         }
 
-        // Currently we only support WAV -> GSM conversion
+        // Support conversions from WAV to telephony formats
         match (from_format, to_format) {
             (AudioFormat::Wav, AudioFormat::Gsm) => {
                 crate::tts::audio_conversion::convert_wav_to_gsm(audio_data)
+            }
+            (AudioFormat::Wav, AudioFormat::Ulaw) => {
+                crate::tts::audio_conversion::convert_wav_to_ulaw(audio_data)
+            }
+            (AudioFormat::Wav, AudioFormat::Alaw) => {
+                crate::tts::audio_conversion::convert_wav_to_alaw(audio_data)
             }
             _ => Err(TtsError::AudioConversionError(format!(
                 "Conversion from {} to {} is not yet supported",

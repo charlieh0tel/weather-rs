@@ -116,11 +116,8 @@ impl TtsBackend for GoogleTts {
 
         let encoding = self.audio_format_to_google_encoding(google_format)?;
 
-        // Use 8kHz for telephony formats (µ-law, A-law, GSM), 22kHz for others
-        let sample_rate = match google_format {
-            AudioFormat::Ulaw | AudioFormat::Alaw | AudioFormat::Gsm => 8000,
-            _ => 22050, // Google TTS default
-        };
+        // Use appropriate sample rate for the format
+        let sample_rate = google_format.telephony_sample_rate();
 
         let request = TtsRequest {
             input: TtsInput {

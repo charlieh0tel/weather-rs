@@ -100,6 +100,69 @@ fn try_sox_conversion(wav_data: &[u8]) -> Result<Vec<u8>, String> {
     Ok(output.stdout)
 }
 
-// Future: Add more conversion functions
-// pub fn convert_wav_to_alaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError>
-// pub fn convert_wav_to_ulaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError>
+/// Convert WAV audio data to telephony format using ffmpeg
+fn convert_wav_to_telephony_format(
+    wav_data: &[u8],
+    ffmpeg_format: &str,
+    format_name: &str,
+) -> Result<Vec<u8>, TtsError> {
+    let mut ffmpeg = Command::new("ffmpeg")
+        .args([
+            "-f",
+            "wav", // Input format
+            "-i",
+            "-", // Read from stdin
+            "-f",
+            ffmpeg_format, // Output format
+            "-ar",
+            "8000", // 8kHz sample rate for telephony
+            "-ac",
+            "1",  // Mono
+            "-y", // Overwrite output
+            "-",  // Write to stdout
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| {
+            TtsError::AudioConversionError(format!(
+                "Failed to spawn ffmpeg for {} conversion: {}",
+                format_name, e
+            ))
+        })?;
+
+    // Write WAV data to ffmpeg stdin
+    if let Some(stdin) = ffmpeg.stdin.take() {
+        let wav_data_owned = wav_data.to_vec();
+        std::thread::spawn(move || {
+            let mut stdin = stdin;
+            let _ = stdin.write_all(&wav_data_owned);
+        });
+    }
+
+    // Get output
+    let output = ffmpeg.wait_with_output().map_err(|e| {
+        TtsError::AudioConversionError(format!("FFmpeg {} conversion failed: {}", format_name, e))
+    })?;
+
+    if !output.status.success() {
+        return Err(TtsError::AudioConversionError(format!(
+            "FFmpeg {} conversion failed: {}",
+            format_name,
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+
+    Ok(output.stdout)
+}
+
+/// Convert WAV audio data to µ-law format
+pub fn convert_wav_to_ulaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
+    convert_wav_to_telephony_format(wav_data, "mulaw", "µ-law")
+}
+
+/// Convert WAV audio data to A-law format
+pub fn convert_wav_to_alaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
+    convert_wav_to_telephony_format(wav_data, "alaw", "A-law")
+}
