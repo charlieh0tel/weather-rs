@@ -1,11 +1,10 @@
 use crate::tts::TtsError;
 
-use std::io::Write;
 /// Audio format conversion utilities
 ///
 /// This module provides functions to convert between different audio formats,
 /// primarily for telephony applications that require specific formats like GSM.
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 /// Convert WAV audio data to GSM format using sox
 pub fn convert_wav_to_gsm(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
@@ -18,38 +17,35 @@ fn convert_wav_to_telephony_format(
     sox_format: &str,
     format_name: &str,
 ) -> Result<Vec<u8>, TtsError> {
-    let mut sox = Command::new("sox")
+    let mut temp_file = tempfile::Builder::new()
+        .suffix(".wav")
+        .tempfile()
+        .map_err(|e| {
+            TtsError::AudioConversionError(format!("Failed to create temp file: {}", e))
+        })?;
+
+    use std::io::Write;
+    temp_file.write_all(wav_data).map_err(|e| {
+        TtsError::AudioConversionError(format!("Failed to write temp WAV: {}", e))
+    })?;
+
+    let temp_path = temp_file.path();
+
+    let output = Command::new("sox")
         .args([
-            "-t", "wav", "-", // Read WAV from stdin
+            temp_path.to_str().unwrap(),
             "-t", sox_format, // Output format
             "-r", "8000", // 8kHz sample rate
             "-c", "1", // Mono
-            "-", // Write to stdout
+            "-",
         ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .output()
         .map_err(|e| {
             TtsError::AudioConversionError(format!(
                 "Failed to spawn sox for {} conversion: {}",
                 format_name, e
             ))
         })?;
-
-    // Write WAV data to sox stdin
-    if let Some(stdin) = sox.stdin.take() {
-        let wav_data_owned = wav_data.to_vec();
-        std::thread::spawn(move || {
-            let mut stdin = stdin;
-            let _ = stdin.write_all(&wav_data_owned);
-        });
-    }
-
-    // Get output
-    let output = sox.wait_with_output().map_err(|e| {
-        TtsError::AudioConversionError(format!("Sox {} conversion failed: {}", format_name, e))
-    })?;
 
     if !output.status.success() {
         return Err(TtsError::AudioConversionError(format!(
