@@ -22,4 +22,7 @@ chmod 0644 "${FILE}"
 cd /tmp
 sudo -u asterisk asterisk -x "rpt localplay ${NODE} ${FILE%.*}"
 
-sleep 10
+# don't delete the file before asterisk opens it.
+sleep 5
+
+exit 0
