@@ -84,7 +84,7 @@ jobs:
           PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
           PKG_CONFIG_ALLOW_CROSS: 1
         run: |
-          cargo build -cargo deb --profile release --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Build deb (aarch64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
@@ -95,11 +95,15 @@ jobs:
         run: |
           cargo deb --profile release --target ${{ matrix.target }}
 
+      - name: List target files
+        run: |
+          ls -lR target
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: target/${{ matrix.target }}/release/*.deb
+          path: target/debian/*.deb
 
   release:
     name: Create GitHub Release
@@ -116,18 +120,14 @@ jobs:
       - name: List before
         run: ls -RF
 
-#      - name: Rename and consolidate artifacts
-#        run: |
-#          mkdir release_assets
+      - name: Cconsolidate artifacts
+        run: |
+          mkdir release_assets
 #          cp -p ./weather-rs-linux-aarch64/ut325f "release_assets/ut325f-linux-aarch64-${{ github.ref_name }}"
 #          cp -p ./ut325f-linux-x86_64/ut325f "release_assets/ut325f-linux-x86_64-${{ github.ref_name }}"
 #	  cp -p target/${{ matrix.target }}/release/weather
 #	    	    target/${{ matrix.target }}/release/speak-weather-espeak
 #	    target/${{ matrix.target }}/release/speak-weather-google-tts
-
-
-      - name: List after
-        run: ls -RF
 
       - name: List release assets
         run: cd release_assets && ls -lF
