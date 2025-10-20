@@ -153,14 +153,8 @@ impl TtsPlayer {
 
         // Support conversions from WAV to telephony formats
         match (from_format, to_format) {
-            (AudioFormat::Wav, AudioFormat::Gsm) => {
-                crate::tts::audio_conversion::convert_wav_to_gsm(audio_data)
-            }
-            (AudioFormat::Wav, AudioFormat::Ulaw) => {
-                crate::tts::audio_conversion::convert_wav_to_ulaw(audio_data)
-            }
-            (AudioFormat::Wav, AudioFormat::Alaw) => {
-                crate::tts::audio_conversion::convert_wav_to_alaw(audio_data)
+            (AudioFormat::Wav, target) if target.is_telephony_format() => {
+                crate::tts::audio_conversion::convert_to_raw_telephony(audio_data, target)
             }
             _ => Err(TtsError::AudioConversionError(format!(
                 "Conversion from {} to {} is not yet supported",
