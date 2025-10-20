@@ -24,12 +24,11 @@ license-file = ["LICENSE", "4"]
 extended-description = """\
 A weather application with text-to-speech support.
 Supports multiple TTS backends including espeak and Google TTS."""
-depends = "$auto, libespeak-ng1"
+depends = "$auto, libespeak-ng1, sox"
 section = "utility"
 priority = "optional"
 assets = [
     ["target/release/weather", "usr/bin/", "755"],
-    ["target/release/speak-weather-espeak", "usr/bin/", "755"],
-    ["target/release/speak-weather-google-tts", "usr/bin/", "755"],
+    ["target/release/speak-weather", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/weather/", "644"],
 ]
