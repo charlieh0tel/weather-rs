@@ -44,8 +44,7 @@ jobs:
             llvm-dev:arm64 \
             libclang-dev:arm64 \
             libasound2-dev:arm64 \
-            libespeak-ng-dev:arm64 \
-            libc6-dev:arm64
+            libespeak-ng-dev:arm64
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
