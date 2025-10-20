@@ -7,65 +7,21 @@ use std::io::Write;
 /// primarily for telephony applications that require specific formats like GSM.
 use std::process::{Command, Stdio};
 
-/// Convert WAV audio data to GSM format using external tools
+/// Convert WAV audio data to GSM format using sox
 pub fn convert_wav_to_gsm(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
-    // Try ffmpeg first, then sox as fallback
-    let result = try_ffmpeg_conversion(wav_data).or_else(|_| try_sox_conversion(wav_data));
-
-    result.map_err(|e| {
-        TtsError::AudioConversionError(format!(
-            "GSM conversion failed. Install ffmpeg or sox for audio conversion. Error: {}",
-            e
-        ))
-    })
+    convert_wav_to_telephony_format(wav_data, "gsm", "GSM")
 }
 
-fn try_ffmpeg_conversion(wav_data: &[u8]) -> Result<Vec<u8>, String> {
-    let mut ffmpeg = Command::new("ffmpeg")
-        .args([
-            "-f", "wav", // Input format
-            "-i", "-", // Read from stdin
-            "-f", "gsm", // Output format
-            "-ar", "8000", // 8kHz sample rate for GSM
-            "-ac", "1",  // Mono
-            "-y", // Overwrite output
-            "-",  // Write to stdout
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn ffmpeg: {}", e))?;
-
-    // Write WAV data to ffmpeg stdin
-    if let Some(stdin) = ffmpeg.stdin.take() {
-        let wav_data_owned = wav_data.to_vec();
-        std::thread::spawn(move || {
-            let mut stdin = stdin;
-            let _ = stdin.write_all(&wav_data_owned);
-        });
-    }
-
-    // Get output
-    let output = ffmpeg
-        .wait_with_output()
-        .map_err(|e| format!("FFmpeg execution failed: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "FFmpeg failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    Ok(output.stdout)
-}
-
-fn try_sox_conversion(wav_data: &[u8]) -> Result<Vec<u8>, String> {
+/// Convert WAV audio data to telephony format using sox
+fn convert_wav_to_telephony_format(
+    wav_data: &[u8],
+    sox_format: &str,
+    format_name: &str,
+) -> Result<Vec<u8>, TtsError> {
     let mut sox = Command::new("sox")
         .args([
             "-t", "wav", "-", // Read WAV from stdin
-            "-t", "gsm", // Output GSM format
+            "-t", sox_format, // Output format
             "-r", "8000", // 8kHz sample rate
             "-c", "1", // Mono
             "-", // Write to stdout
@@ -74,7 +30,12 @@ fn try_sox_conversion(wav_data: &[u8]) -> Result<Vec<u8>, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to spawn sox: {}", e))?;
+        .map_err(|e| {
+            TtsError::AudioConversionError(format!(
+                "Failed to spawn sox for {} conversion: {}",
+                format_name, e
+            ))
+        })?;
 
     // Write WAV data to sox stdin
     if let Some(stdin) = sox.stdin.take() {
@@ -86,69 +47,13 @@ fn try_sox_conversion(wav_data: &[u8]) -> Result<Vec<u8>, String> {
     }
 
     // Get output
-    let output = sox
-        .wait_with_output()
-        .map_err(|e| format!("Sox execution failed: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Sox failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    Ok(output.stdout)
-}
-
-/// Convert WAV audio data to telephony format using ffmpeg
-fn convert_wav_to_telephony_format(
-    wav_data: &[u8],
-    ffmpeg_format: &str,
-    format_name: &str,
-) -> Result<Vec<u8>, TtsError> {
-    let mut ffmpeg = Command::new("ffmpeg")
-        .args([
-            "-f",
-            "wav", // Input format
-            "-i",
-            "-", // Read from stdin
-            "-f",
-            ffmpeg_format, // Output format
-            "-ar",
-            "8000", // 8kHz sample rate for telephony
-            "-ac",
-            "1",  // Mono
-            "-y", // Overwrite output
-            "-",  // Write to stdout
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            TtsError::AudioConversionError(format!(
-                "Failed to spawn ffmpeg for {} conversion: {}",
-                format_name, e
-            ))
-        })?;
-
-    // Write WAV data to ffmpeg stdin
-    if let Some(stdin) = ffmpeg.stdin.take() {
-        let wav_data_owned = wav_data.to_vec();
-        std::thread::spawn(move || {
-            let mut stdin = stdin;
-            let _ = stdin.write_all(&wav_data_owned);
-        });
-    }
-
-    // Get output
-    let output = ffmpeg.wait_with_output().map_err(|e| {
-        TtsError::AudioConversionError(format!("FFmpeg {} conversion failed: {}", format_name, e))
+    let output = sox.wait_with_output().map_err(|e| {
+        TtsError::AudioConversionError(format!("Sox {} conversion failed: {}", format_name, e))
     })?;
 
     if !output.status.success() {
         return Err(TtsError::AudioConversionError(format!(
-            "FFmpeg {} conversion failed: {}",
+            "Sox {} conversion failed: {}",
             format_name,
             String::from_utf8_lossy(&output.stderr)
         )));
@@ -159,10 +64,10 @@ fn convert_wav_to_telephony_format(
 
 /// Convert WAV audio data to µ-law format
 pub fn convert_wav_to_ulaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
-    convert_wav_to_telephony_format(wav_data, "mulaw", "µ-law")
+    convert_wav_to_telephony_format(wav_data, "ul", "µ-law")
 }
 
 /// Convert WAV audio data to A-law format
 pub fn convert_wav_to_alaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
-    convert_wav_to_telephony_format(wav_data, "alaw", "A-law")
+    convert_wav_to_telephony_format(wav_data, "al", "A-law")
 }
