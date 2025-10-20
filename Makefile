@@ -12,16 +12,21 @@ FORMATS := wav ulaw alaw gsm
 ANNOUNCEMENT_FORMATS := speech brief detailed aviation
 
 all: test
+.PHONY: all
 
 build:
 	$(BUILD_CMD)
+.PHONY: build
 
 test: build test-weather test-all-formats test-speech test-text
+.PHONY: test
 
 test-weather: build
 	$(RUN_CMD) weather -- $(ICAO)
+.PHONY: test-weather
 
 test-all-formats: $(addprefix test-espeak-,$(FORMATS)) $(addprefix test-google-,$(FORMATS))
+.PHONY: test-all-formats
 
 test-espeak-%: build
 	$(RUN_CMD) speak-weather -- espeak $(ICAO) --output $(OUTPUT_DIR)/$(ICAO)-espeak.$* --audio-format $* --format aviation
@@ -32,6 +37,7 @@ test-google-%: build
 	@file $(OUTPUT_DIR)/$(ICAO)-google.$*
 
 test-announcement-formats: $(addprefix test-announcement-,$(ANNOUNCEMENT_FORMATS))
+.PHONY: test-announcement-formats
 
 test-announcement-%: build
 	$(RUN_CMD) speak-weather -- text $(ICAO) --format $* --output $(OUTPUT_DIR)/$(ICAO)-$*.txt
@@ -41,26 +47,12 @@ test-announcement-%: build
 test-speech: build
 	$(RUN_CMD) speak-weather -- espeak $(ICAO) --format aviation
 	$(RUN_CMD) speak-weather -- google $(ICAO) --format aviation
+.PHONY: test-speech
 
 test-text: build
 	$(RUN_CMD) speak-weather -- text $(ICAO) --format aviation
+.PHONY: test-text
 
 clean:
 	rm -f $(OUTPUT_DIR)/$(ICAO)-espeak.* $(OUTPUT_DIR)/$(ICAO)-google.* $(OUTPUT_DIR)/$(ICAO)-*.txt
-
-help:
-	@echo "Available targets:"
-	@echo "  test                     - Run all tests"
-	@echo "  test-weather             - Test weather binary (data only)"
-	@echo "  test-all-formats         - Test all audio formats"
-	@echo "  test-announcement-formats - Test all announcement formats"
-	@echo "  test-speech              - Test live speech playback"
-	@echo "  test-text                - Test text engine"
-	@echo "  clean                    - Remove generated files"
-	@echo ""
-	@echo "Configuration:"
-	@echo "  PROFILE=$(PROFILE)       - Build profile (release or debug)"
-	@echo "  ICAO=$(ICAO)             - Airport code to test"
-	@echo "  OUTPUT_DIR=$(OUTPUT_DIR) - Directory for audio files"
-
-.PHONY: all build test test-weather test-all-formats test-announcement-formats test-speech test-text clean help
+.PHONY: clean
