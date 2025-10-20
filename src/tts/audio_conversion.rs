@@ -31,14 +31,17 @@ fn convert_wav_to_telephony_format(
 
     let temp_path = temp_file.path();
 
+    let sox_args = [
+        temp_path.to_str().unwrap(),
+        "-t", sox_format,
+        "-r", "8000",
+        "-c", "1",
+        "-",
+    ];
+    eprintln!("Running: sox {}", sox_args.join(" "));
+
     let output = Command::new("sox")
-        .args([
-            temp_path.to_str().unwrap(),
-            "-t", sox_format, // Output format
-            "-r", "8000", // 8kHz sample rate
-            "-c", "1", // Mono
-            "-",
-        ])
+        .args(sox_args)
         .output()
         .map_err(|e| {
             TtsError::AudioConversionError(format!(
