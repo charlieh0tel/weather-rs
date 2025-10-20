@@ -17,8 +17,7 @@ trap '/bin/rm -f "${FILE}"' EXIT SIGINT SIGTERM
 
 cargo run --bin "speak-weather" -- "${ENGINE}" -f aviation -a "${FORMAT}" -o "${FILE}" "${ICAO}"
 
-ls -l "${FILE}"
-file "${FILE}"
+chmod 0644 "${FILE}"
 
 cd /tmp
 sudo -u asterisk asterisk -x "rpt localplay ${NODE} ${FILE%.*}"
