@@ -107,13 +107,9 @@ struct TtsResponse {
 
 impl TtsBackend for GoogleTts {
     fn synthesize(&self, text: &str, format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
-        // Google TTS supports most formats, but telephony formats need raw extraction
-        let (google_format, needs_conversion) = if matches!(format, AudioFormat::Gsm) {
-            // GSM not supported by Google TTS, use WAV and convert
+        // For telephony formats, always use WAV and convert to raw
+        let (google_format, needs_conversion) = if format.is_telephony_format() {
             (&AudioFormat::Wav, true)
-        } else if matches!(format, AudioFormat::Ulaw | AudioFormat::Alaw) {
-            // Google TTS generates WAV-wrapped telephony, need to extract raw
-            (format, true)
         } else {
             (format, false)
         };

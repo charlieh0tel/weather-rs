@@ -72,49 +72,22 @@ pub fn convert_wav_to_alaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
     convert_wav_to_telephony_format(wav_data, "al", "A-law")
 }
 
-/// Extract raw audio data from WAV file
-fn extract_raw_audio_from_wav(wav_data: &[u8], format_name: &str) -> Result<Vec<u8>, TtsError> {
-    use std::io::Cursor;
 
-    let cursor = Cursor::new(wav_data);
-    let mut reader = hound::WavReader::new(cursor).map_err(|e| {
-        TtsError::AudioConversionError(format!(
-            "Failed to read WAV for {} extraction: {}",
-            format_name, e
-        ))
-    })?;
-
-    // µ-law and A-law are 8-bit formats, but hound treats them as i8
-    let samples: Result<Vec<i8>, _> = reader.samples::<i8>().collect();
-    let samples = samples.map_err(|e| {
-        TtsError::AudioConversionError(format!("Failed to extract {} samples: {}", format_name, e))
-    })?;
-
-    // Convert i8 to u8 (reinterpret bytes)
-    Ok(samples.into_iter().map(|s| s as u8).collect())
-}
-
-/// Convert WAV to raw telephony format, handling both backends
+/// Convert WAV to raw telephony format using sox
 pub fn convert_to_raw_telephony(
     wav_data: &[u8],
     target_format: &crate::tts::AudioFormat,
 ) -> Result<Vec<u8>, TtsError> {
     use crate::tts::AudioFormat;
 
-    // Check if this is a Google TTS WAV with telephony encoding
-    if wav_data.starts_with(b"RIFF") && matches!(target_format, AudioFormat::Ulaw | AudioFormat::Alaw) {
-        // Google TTS WAV-wrapped telephony - extract raw data
-        extract_raw_audio_from_wav(wav_data, &format!("{}", target_format))
-    } else {
-        // eSpeak WAV or GSM conversion - use sox
-        match target_format {
-            AudioFormat::Ulaw => convert_wav_to_telephony_format(wav_data, "ul", "µ-law"),
-            AudioFormat::Alaw => convert_wav_to_telephony_format(wav_data, "al", "A-law"),
-            AudioFormat::Gsm => convert_wav_to_telephony_format(wav_data, "gsm", "GSM"),
-            _ => Err(TtsError::AudioConversionError(format!(
-                "Unsupported telephony format: {}",
-                target_format
-            ))),
-        }
+    // Always use sox conversion - works for both Google TTS and eSpeak WAV files
+    match target_format {
+        AudioFormat::Ulaw => convert_wav_to_telephony_format(wav_data, "ul", "µ-law"),
+        AudioFormat::Alaw => convert_wav_to_telephony_format(wav_data, "al", "A-law"),
+        AudioFormat::Gsm => convert_wav_to_telephony_format(wav_data, "gsm", "GSM"),
+        _ => Err(TtsError::AudioConversionError(format!(
+            "Unsupported telephony format: {}",
+            target_format
+        ))),
     }
 }
