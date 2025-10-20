@@ -94,21 +94,27 @@ fn extract_raw_audio_from_wav(wav_data: &[u8], format_name: &str) -> Result<Vec<
     Ok(samples.into_iter().map(|s| s as u8).collect())
 }
 
-/// Convert WAV to raw telephony format, handling both RIFF WAV and raw WAV
+/// Convert WAV to raw telephony format, handling both backends
 pub fn convert_to_raw_telephony(
     wav_data: &[u8],
     target_format: &crate::tts::AudioFormat,
 ) -> Result<Vec<u8>, TtsError> {
     use crate::tts::AudioFormat;
 
-    // Always use sox conversion for now - both backends generate standard WAV
-    match target_format {
-        AudioFormat::Ulaw => convert_wav_to_telephony_format(wav_data, "ul", "µ-law"),
-        AudioFormat::Alaw => convert_wav_to_telephony_format(wav_data, "al", "A-law"),
-        AudioFormat::Gsm => convert_wav_to_telephony_format(wav_data, "gsm", "GSM"),
-        _ => Err(TtsError::AudioConversionError(format!(
-            "Unsupported telephony format: {}",
-            target_format
-        ))),
+    // Check if this is a Google TTS WAV with telephony encoding
+    if wav_data.starts_with(b"RIFF") && matches!(target_format, AudioFormat::Ulaw | AudioFormat::Alaw) {
+        // Google TTS WAV-wrapped telephony - extract raw data
+        extract_raw_audio_from_wav(wav_data, &format!("{}", target_format))
+    } else {
+        // eSpeak WAV or GSM conversion - use sox
+        match target_format {
+            AudioFormat::Ulaw => convert_wav_to_telephony_format(wav_data, "ul", "µ-law"),
+            AudioFormat::Alaw => convert_wav_to_telephony_format(wav_data, "al", "A-law"),
+            AudioFormat::Gsm => convert_wav_to_telephony_format(wav_data, "gsm", "GSM"),
+            _ => Err(TtsError::AudioConversionError(format!(
+                "Unsupported telephony format: {}",
+                target_format
+            ))),
+        }
     }
 }

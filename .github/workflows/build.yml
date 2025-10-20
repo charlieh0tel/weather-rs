@@ -37,6 +37,12 @@ jobs:
       - name: Install aarch64 build dependencies
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/arm64.list
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse
+          EOF
           sudo dpkg --add-architecture arm64
           sudo apt-get update -m || :;
           sudo apt-get install -y \
