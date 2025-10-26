@@ -15,6 +15,7 @@ const ESPEAK_PARAM_WORDGAP: u32 = 4;
 
 #[derive(Debug, Clone)]
 pub struct EspeakVoice {
+    pub name: String,
     pub speed: u32,
     pub pitch: u32,
     pub gap: u32,
@@ -23,6 +24,7 @@ pub struct EspeakVoice {
 impl Default for EspeakVoice {
     fn default() -> Self {
         Self {
+            name: "en-us".to_string(),
             speed: 120,
             pitch: 50,
             gap: 15,
@@ -33,6 +35,7 @@ impl Default for EspeakVoice {
 impl EspeakVoice {
     pub fn us_female() -> Self {
         Self {
+            name: "en-us+f3".to_string(),
             speed: 120,
             pitch: 60,
             gap: 15,
@@ -41,25 +44,10 @@ impl EspeakVoice {
 
     pub fn us_male() -> Self {
         Self {
+            name: "en-us+m3".to_string(),
             speed: 120,
             pitch: 40,
             gap: 15,
-        }
-    }
-
-    pub fn uk_female() -> Self {
-        Self {
-            speed: 110,
-            pitch: 55,
-            gap: 20,
-        }
-    }
-
-    pub fn uk_male() -> Self {
-        Self {
-            speed: 110,
-            pitch: 35,
-            gap: 20,
         }
     }
 }
@@ -70,8 +58,6 @@ impl From<Voice> for EspeakVoice {
             Voice::Default => EspeakVoice::default(),
             Voice::UsFemale => EspeakVoice::us_female(),
             Voice::UsMale => EspeakVoice::us_male(),
-            Voice::UkFemale => EspeakVoice::uk_female(),
-            Voice::UkMale => EspeakVoice::uk_male(),
         }
     }
 }
@@ -108,6 +94,19 @@ impl TtsBackend for EspeakTts {
                 return Err(TtsError::SynthesisError(
                     "Failed to initialize eSpeak".to_string(),
                 ));
+            }
+
+            // Set voice by name (if voice name is not empty)
+            if !self.voice.name.is_empty() {
+                let c_voice_name = CString::new(self.voice.name.as_str())
+                    .map_err(|e| TtsError::SynthesisError(format!("Invalid voice name: {}", e)))?;
+                let result = espeakng_sys::espeak_SetVoiceByName(c_voice_name.as_ptr());
+                if result != 0 {
+                    eprintln!(
+                        "Warning: Failed to set voice '{}', using default",
+                        self.voice.name
+                    );
+                }
             }
 
             // Set voice parameters
@@ -234,6 +233,19 @@ impl TtsBackend for EspeakTts {
                 return Err(TtsError::SynthesisError(
                     "Failed to initialize eSpeak".to_string(),
                 ));
+            }
+
+            // Set voice by name (if voice name is not empty)
+            if !self.voice.name.is_empty() {
+                let c_voice_name = CString::new(self.voice.name.as_str())
+                    .map_err(|e| TtsError::SynthesisError(format!("Invalid voice name: {}", e)))?;
+                let result = espeakng_sys::espeak_SetVoiceByName(c_voice_name.as_ptr());
+                if result != 0 {
+                    eprintln!(
+                        "Warning: Failed to set voice '{}', using default",
+                        self.voice.name
+                    );
+                }
             }
 
             // Set voice parameters

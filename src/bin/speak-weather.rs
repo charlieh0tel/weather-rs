@@ -4,8 +4,8 @@ use weather::{
     tts::{
         AnnouncementFormat, AudioFormat, Voice,
         espeak::{EspeakTts, EspeakVoice},
-        google_tts::GoogleTts,
         execute_tts_output, generate_weather_announcement,
+        google_tts::GoogleTts,
     },
 };
 
@@ -95,7 +95,10 @@ fn create_espeak_voice(voice: Voice, speed: u32, pitch: u32, gap: u32) -> Espeak
 }
 
 fn handle_espeak(args: EspeakArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Fetching weather for {}...\n", args.common.icao.to_uppercase());
+    println!(
+        "Fetching weather for {}...\n",
+        args.common.icao.to_uppercase()
+    );
 
     let metar = fetch_weather_data(&args.common.icao)?;
     let announcement = generate_weather_announcement(&metar, &args.common.format);
@@ -109,7 +112,10 @@ fn handle_espeak(args: EspeakArgs) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Fetching weather for {}...\n", args.common.icao.to_uppercase());
+    println!(
+        "Fetching weather for {}...\n",
+        args.common.icao.to_uppercase()
+    );
 
     let metar = fetch_weather_data(&args.common.icao)?;
     let announcement = generate_weather_announcement(&metar, &args.common.format);
@@ -126,7 +132,10 @@ fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn handle_text(args: TextArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Fetching weather for {}...\n", args.common.icao.to_uppercase());
+    println!(
+        "Fetching weather for {}...\n",
+        args.common.icao.to_uppercase()
+    );
 
     let metar = fetch_weather_data(&args.common.icao)?;
     let announcement = generate_weather_announcement(&metar, &args.common.format);

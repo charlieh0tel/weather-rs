@@ -25,30 +25,30 @@ fn convert_wav_to_telephony_format(
         })?;
 
     use std::io::Write;
-    temp_file.write_all(wav_data).map_err(|e| {
-        TtsError::AudioConversionError(format!("Failed to write temp WAV: {}", e))
-    })?;
+    temp_file
+        .write_all(wav_data)
+        .map_err(|e| TtsError::AudioConversionError(format!("Failed to write temp WAV: {}", e)))?;
 
     let temp_path = temp_file.path();
 
     let sox_args = [
         temp_path.to_str().unwrap(),
-        "-t", sox_format,
-        "-r", "8000",
-        "-c", "1",
+        "-t",
+        sox_format,
+        "-r",
+        "8000",
+        "-c",
+        "1",
         "-",
     ];
     eprintln!("Running: sox {}", sox_args.join(" "));
 
-    let output = Command::new("sox")
-        .args(sox_args)
-        .output()
-        .map_err(|e| {
-            TtsError::AudioConversionError(format!(
-                "Failed to spawn sox for {} conversion: {}",
-                format_name, e
-            ))
-        })?;
+    let output = Command::new("sox").args(sox_args).output().map_err(|e| {
+        TtsError::AudioConversionError(format!(
+            "Failed to spawn sox for {} conversion: {}",
+            format_name, e
+        ))
+    })?;
 
     if !output.status.success() {
         return Err(TtsError::AudioConversionError(format!(
@@ -70,7 +70,6 @@ pub fn convert_wav_to_ulaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
 pub fn convert_wav_to_alaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
     convert_wav_to_telephony_format(wav_data, "al", "A-law")
 }
-
 
 /// Convert WAV to raw telephony format using sox
 pub fn convert_to_raw_telephony(

@@ -40,8 +40,6 @@ impl From<Voice> for GoogleVoice {
             Voice::Default => GoogleVoice::Default,
             Voice::UsFemale => GoogleVoice::UsFemale,
             Voice::UsMale => GoogleVoice::UsMale,
-            Voice::UkFemale => GoogleVoice::UkFemale,
-            Voice::UkMale => GoogleVoice::UkMale,
         }
     }
 }
