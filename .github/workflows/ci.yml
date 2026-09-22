@@ -14,3 +14,7 @@ jobs:
       build-deps: "llvm-dev libclang-dev libasound2-dev libespeak-ng-dev"
       # so clippy sees the tests too
       check-args: "--all-targets"
+      # Stable rustfmt, not the workflow's default nightly: this repo has no
+      # rustfmt.toml and no nightly-only options, so the check should agree
+      # with what `cargo fmt` gives a contributor.
+      fmt-toolchain: ""
