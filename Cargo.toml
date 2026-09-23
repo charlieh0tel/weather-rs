@@ -1,6 +1,8 @@
 [package]
 name = "weather"
 version = "0.9.3"
+# The name weather on crates.io belongs to a different project, so this cannot publish under it.
+publish = false
 edition = "2024"
 license = "BSD-3-Clause"
 description = "Weather application with text-to-speech support"
