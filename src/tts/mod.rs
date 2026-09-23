@@ -164,12 +164,11 @@ impl TtsPlayer {
         }
 
         use std::io::Cursor;
-        let (_stream, stream_handle) = rodio::OutputStream::try_default().map_err(|e| {
-            TtsError::PlaybackError(format!("Failed to create audio stream: {}", e))
-        })?;
+        let mut device_sink = rodio::DeviceSinkBuilder::open_default_sink()
+            .map_err(|e| TtsError::PlaybackError(format!("Failed to open audio device: {}", e)))?;
+        device_sink.log_on_drop(false);
 
-        let sink = rodio::Sink::try_new(&stream_handle)
-            .map_err(|e| TtsError::PlaybackError(format!("Failed to create audio sink: {}", e)))?;
+        let player = rodio::Player::connect_new(device_sink.mixer());
 
         // Clone the audio data to avoid lifetime issues
         let audio_data_owned = audio_data.to_vec();
@@ -177,8 +176,8 @@ impl TtsPlayer {
         let source = rodio::Decoder::new(cursor)
             .map_err(|e| TtsError::PlaybackError(format!("Failed to decode audio: {}", e)))?;
 
-        sink.append(source);
-        sink.sleep_until_end();
+        player.append(source);
+        player.sleep_until_end();
         Ok(())
     }
 }
