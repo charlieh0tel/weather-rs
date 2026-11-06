@@ -23,37 +23,38 @@ fn get_abbreviations() -> &'static HashMap<&'static str, &'static str> {
     })
 }
 
-pub fn expand_abbreviations(text: &str) -> String {
+fn push_expanded(result: &mut String, word: &str) {
     let abbrev_map = get_abbreviations();
 
+    if let Some(expansion) = abbrev_map.get(word) {
+        result.push_str(expansion);
+        return;
+    }
+
+    let stem = word.trim_end_matches('.');
+    if let Some(expansion) = abbrev_map.get(stem) {
+        result.push_str(expansion);
+        result.push_str(&word[stem.len()..]);
+    } else {
+        result.push_str(word);
+    }
+}
+
+pub fn expand_abbreviations(text: &str) -> String {
     let mut result = String::with_capacity(text.len() + 50);
-    let chars = text.chars();
     let mut current_word = String::new();
 
-    for ch in chars {
+    for ch in text.chars() {
         if ch.is_alphabetic() || ch == '.' {
             current_word.push(ch);
         } else {
-            if !current_word.is_empty() {
-                if let Some(expansion) = abbrev_map.get(current_word.as_str()) {
-                    result.push_str(expansion);
-                } else {
-                    result.push_str(&current_word);
-                }
-                current_word.clear();
-            }
+            push_expanded(&mut result, &current_word);
+            current_word.clear();
             result.push(ch);
         }
     }
 
-    // Handle last word if string doesn't end with delimiter
-    if !current_word.is_empty() {
-        if let Some(expansion) = abbrev_map.get(current_word.as_str()) {
-            result.push_str(expansion);
-        } else {
-            result.push_str(&current_word);
-        }
-    }
+    push_expanded(&mut result, &current_word);
 
     result
 }
@@ -75,6 +76,9 @@ mod tests {
             ("Ft. Worth, TX", "Fort Worth, Texas"),
             ("Arpt2", "Airport2"),
             ("Zürich Intl", "Zürich International"),
+            ("Intl.", "International."),
+            ("Near San Jose, CA.", "Near San Jose, California."),
+            ("Arpt...", "Airport..."),
         ];
 
         for (input, expected) in cases {
@@ -87,8 +91,9 @@ mod tests {
         let cases = [
             "Unknown Field",
             "intl",
-            "Intl.",
             "St",
+            "U.S.",
+            "...",
             "Mt.Hood",
             "Runway 12",
         ];
