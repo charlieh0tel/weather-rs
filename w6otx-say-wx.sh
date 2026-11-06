@@ -1,32 +1,49 @@
 #!/bin/bash
+#
+# Announces the current weather on an AllStar node.
 
 set -o errexit
 set -o nounset
 
-NODE=65314
-ICAO="KSJC"
-#ENGINE="google"
-ENGINE="espeak"
-ENGINE_ARGS=("-v" "uk-female")
-FORMAT="ulaw"
-STYLE="brief"
+readonly NODE=65314
+readonly ICAO="KSJC"
+#readonly ENGINE="google"
+readonly ENGINE="espeak"
+readonly -a ENGINE_ARGS=("-v" "uk-female")
+readonly FORMAT="ulaw"
+readonly STYLE="brief"
+# How long a busy node gets to open the file before it is deleted.
+readonly PLAYBACK_WAIT_SECONDS=60
 
-if [[ "${ENGINE}" == "google" ]]; then
-  # shellcheck source=/dev/null
-  . ~/google_cloud_tts_api.shfrag
-fi
+audio_file=""
 
-FILE="$(mktemp "/tmp/tmpXXXXXXXXXX.${FORMAT}")"
-trap '/bin/rm -f "${FILE}"' EXIT SIGINT SIGTERM
+cleanup() {
+  if [[ -n "${audio_file}" ]]; then
+    /bin/rm -f "${audio_file}"
+  fi
+}
 
-speak-weather "${ENGINE}" "${ENGINE_ARGS[@]}" -f "${STYLE}" -a "${FORMAT}" -o "${FILE}" "${ICAO}"
+main() {
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
 
-chmod 0644 "${FILE}"
+  if [[ "${ENGINE}" == "google" ]]; then
+    # shellcheck source=/dev/null
+    source ~/google_cloud_tts_api.shfrag
+  fi
 
-cd /tmp
-sudo -u asterisk asterisk -x "rpt localplay ${NODE} ${FILE%.*}"
+  audio_file="$(mktemp "/tmp/tmpXXXXXXXXXX.${FORMAT}")"
 
-# don't delete the file before asterisk opens it.
-sleep 5
+  speak-weather "${ENGINE}" "${ENGINE_ARGS[@]}" -f "${STYLE}" -a "${FORMAT}" \
+    -o "${audio_file}" "${ICAO}"
 
-exit 0
+  chmod 0644 "${audio_file}"
+
+  cd /tmp
+  sudo -u asterisk asterisk -x "rpt localplay ${NODE} ${audio_file%.*}"
+
+  sleep "${PLAYBACK_WAIT_SECONDS}"
+}
+
+main "$@"
