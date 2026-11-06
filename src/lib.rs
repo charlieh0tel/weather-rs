@@ -214,23 +214,31 @@ pub fn fetch_weather_data(icao: &str) -> Result<MetarData> {
         .build()
         .map_err(|e| WeatherError::HttpClient(e.to_string()))?;
 
-    let response_text = client
+    let response = client
         .get(&url)
         .send()
-        .map_err(|e| WeatherError::Request(e.to_string()))?
+        .map_err(|e| WeatherError::Request(e.to_string()))?;
+    let status = response.status();
+    let body = response
         .text()
         .map_err(|e| WeatherError::Request(e.to_string()))?;
 
-    if response_text.is_empty() {
+    parse_metar_response(icao, status, &body)
+}
+
+fn parse_metar_response(icao: &str, status: reqwest::StatusCode, body: &str) -> Result<MetarData> {
+    if !status.is_success() {
+        return Err(WeatherError::Request(format!(
+            "aviationweather.gov returned HTTP status {status}"
+        )));
+    }
+
+    if body.is_empty() {
         return Err(WeatherError::EmptyResponse(icao.to_string()));
     }
 
-    let response: Vec<MetarData> = serde_json::from_str(&response_text)
-        .map_err(|e| WeatherError::InvalidJson(format!("{}: {}", e, response_text)))?;
-
-    if response.is_empty() {
-        return Err(WeatherError::NoData(icao.to_uppercase()));
-    }
+    let response: Vec<MetarData> = serde_json::from_str(body)
+        .map_err(|e| WeatherError::InvalidJson(format!("{}: {}", e, body)))?;
 
     response
         .into_iter()
@@ -349,5 +357,45 @@ mod tests {
                 "icao: {icao:?}"
             );
         }
+    }
+
+    #[test]
+    fn parses_successful_responses() {
+        let metar = parse_metar_response(
+            "KSJC",
+            reqwest::StatusCode::OK,
+            r#"[{"icaoId": "KSJC", "rawOb": "RAW"}]"#,
+        )
+        .unwrap();
+
+        assert_eq!(metar.icao_id, "KSJC");
+    }
+
+    #[test]
+    fn classifies_failed_responses() {
+        use reqwest::StatusCode;
+
+        let error = |status, body| parse_metar_response("ksjc", status, body).unwrap_err();
+
+        assert!(matches!(
+            error(StatusCode::BAD_REQUEST, r#"{"status":"error"}"#),
+            WeatherError::Request(_)
+        ));
+        assert!(matches!(
+            error(StatusCode::INTERNAL_SERVER_ERROR, "<html>"),
+            WeatherError::Request(_)
+        ));
+        assert!(matches!(
+            error(StatusCode::NO_CONTENT, ""),
+            WeatherError::EmptyResponse(_)
+        ));
+        assert!(matches!(
+            error(StatusCode::OK, "[]"),
+            WeatherError::NoData(icao) if icao == "KSJC"
+        ));
+        assert!(matches!(
+            error(StatusCode::OK, "<html>"),
+            WeatherError::InvalidJson(_)
+        ));
     }
 }
