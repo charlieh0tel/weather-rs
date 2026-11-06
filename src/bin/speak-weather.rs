@@ -53,17 +53,17 @@ struct EspeakArgs {
     #[arg(short, long, value_enum, default_value = "default")]
     voice: Voice,
 
-    /// Speech speed in words per minute
-    #[arg(short, long, default_value = "120")]
-    speed: u32,
+    /// Speech speed in words per minute [default: from the voice]
+    #[arg(short, long)]
+    speed: Option<u32>,
 
-    /// Voice pitch (0-99)
-    #[arg(short = 'p', long, default_value = "50")]
-    pitch: u32,
+    /// Voice pitch (0-99) [default: from the voice]
+    #[arg(short = 'p', long)]
+    pitch: Option<u32>,
 
-    /// Gap between words in 10ms units
-    #[arg(short = 'g', long, default_value = "0")]
-    gap: u32,
+    /// Gap between words in 10ms units [default: from the voice]
+    #[arg(short = 'g', long)]
+    gap: Option<u32>,
 }
 
 #[derive(Args, Debug)]
@@ -86,12 +86,19 @@ struct TextArgs {
     common: CommonArgs,
 }
 
-fn create_espeak_voice(voice: Voice, speed: u32, pitch: u32, gap: u32) -> EspeakVoice {
-    let mut espeak_voice: EspeakVoice = voice.into();
-    espeak_voice.speed = speed;
-    espeak_voice.pitch = pitch;
-    espeak_voice.gap = gap;
-    espeak_voice
+fn create_espeak_voice(
+    voice: Voice,
+    speed: Option<u32>,
+    pitch: Option<u32>,
+    gap: Option<u32>,
+) -> EspeakVoice {
+    let preset = EspeakVoice::from(voice);
+    EspeakVoice {
+        speed: speed.unwrap_or(preset.speed),
+        pitch: pitch.unwrap_or(preset.pitch),
+        gap: gap.unwrap_or(preset.gap),
+        ..preset
+    }
 }
 
 fn handle_espeak(args: EspeakArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -191,5 +198,18 @@ mod tests {
             "KSJC",
         ])
         .unwrap();
+    }
+
+    #[test]
+    fn voice_presets_keep_their_settings_unless_overridden() {
+        let preset = create_espeak_voice(Voice::UsMale, None, None, None);
+        assert_eq!(preset.pitch, EspeakVoice::us_male().pitch);
+
+        let overridden = create_espeak_voice(Voice::UsMale, Some(200), Some(70), Some(5));
+        assert_eq!(
+            (overridden.speed, overridden.pitch, overridden.gap),
+            (200, 70, 5)
+        );
+        assert_eq!(overridden.name, EspeakVoice::us_male().name);
     }
 }
