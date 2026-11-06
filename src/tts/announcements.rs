@@ -16,6 +16,12 @@ pub enum AnnouncementFormat {
     Aviation,
 }
 
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum TemperatureUnit {
+    Fahrenheit,
+    Celsius,
+}
+
 const SECONDS_PER_DAY: i64 = 24 * 60 * 60;
 const STALE_AFTER_MINUTES: i64 = 90;
 
@@ -55,6 +61,16 @@ fn spoken_observation(obs_time: Option<i64>, now: i64) -> String {
     spoken
 }
 
+fn spoken_temperature(temp_c: f64, unit: TemperatureUnit) -> String {
+    match unit {
+        TemperatureUnit::Fahrenheit => format!(
+            "{} degrees fahrenheit",
+            spoken_degrees(celsius_to_fahrenheit(temp_c))
+        ),
+        TemperatureUnit::Celsius => format!("{} degrees celsius", spoken_degrees(temp_c)),
+    }
+}
+
 fn spoken_group(group: &WeatherGroup) -> &str {
     group
         .description
@@ -71,14 +87,24 @@ fn spoken_degrees(degrees: f64) -> String {
     }
 }
 
-pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFormat) -> String {
+/// `unit` applies to every format except detailed, which always gives both units.
+pub fn generate_weather_announcement(
+    metar: &MetarData,
+    format: &AnnouncementFormat,
+    unit: TemperatureUnit,
+) -> String {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs() as i64);
-    announcement_at(metar, format, now)
+    announcement_at(metar, format, unit, now)
 }
 
-fn announcement_at(metar: &MetarData, format: &AnnouncementFormat, now: i64) -> String {
+fn announcement_at(
+    metar: &MetarData,
+    format: &AnnouncementFormat,
+    unit: TemperatureUnit,
+    now: i64,
+) -> String {
     let observation = spoken_observation(metar.obs_time, now);
     let groups = metar
         .wx_string
@@ -97,10 +123,9 @@ fn announcement_at(metar: &MetarData, format: &AnnouncementFormat, now: i64) -> 
             announcement.push_str(&observation);
 
             if let Some(temp_c) = metar.temp {
-                let temp_f = celsius_to_fahrenheit(temp_c);
                 announcement.push_str(&format!(
-                    "Temperature... {} degrees fahrenheit... ",
-                    spoken_degrees(temp_f)
+                    "Temperature... {}... ",
+                    spoken_temperature(temp_c, unit)
                 ));
             }
 
@@ -161,10 +186,9 @@ fn announcement_at(metar: &MetarData, format: &AnnouncementFormat, now: i64) -> 
             announcement.push_str(&observation);
 
             if let Some(temp_c) = metar.temp {
-                let temp_f = celsius_to_fahrenheit(temp_c);
                 announcement.push_str(&format!(
-                    "Temperature {} degrees... ",
-                    spoken_degrees(temp_f)
+                    "Temperature {}... ",
+                    spoken_temperature(temp_c, unit)
                 ));
             }
 
@@ -191,7 +215,12 @@ mod tests {
     const OBSERVED_AT: i64 = 20_000 * SECONDS_PER_DAY + 16 * 3600 + 28 * 60;
 
     fn announce(metar: &MetarData, format: &AnnouncementFormat) -> String {
-        announcement_at(metar, format, OBSERVED_AT + 600)
+        announcement_at(
+            metar,
+            format,
+            TemperatureUnit::Fahrenheit,
+            OBSERVED_AT + 600,
+        )
     }
 
     fn bare_metar() -> MetarData {
@@ -278,7 +307,7 @@ mod tests {
         let cases = [
             (
                 full_metar(),
-                "K S F O weather... Observed one six two eight zulu... Temperature 68 degrees... Light rain... Mist... End weather...",
+                "K S F O weather... Observed one six two eight zulu... Temperature 68 degrees fahrenheit... Light rain... Mist... End weather...",
             ),
             (
                 bare_metar(),
@@ -385,6 +414,46 @@ mod tests {
     }
 
     #[test]
+    fn temperature_unit_is_configurable() {
+        let metar = MetarData {
+            temp: Some(20.0),
+            ..bare_metar()
+        };
+        let cases = [
+            (
+                AnnouncementFormat::Aviation,
+                TemperatureUnit::Celsius,
+                "Temperature 20 degrees celsius...",
+            ),
+            (
+                AnnouncementFormat::Aviation,
+                TemperatureUnit::Fahrenheit,
+                "Temperature 68 degrees fahrenheit...",
+            ),
+            (
+                AnnouncementFormat::Speech,
+                TemperatureUnit::Celsius,
+                "Temperature... 20 degrees celsius...",
+            ),
+            (
+                AnnouncementFormat::Brief,
+                TemperatureUnit::Celsius,
+                "Temperature... 20 degrees celsius...",
+            ),
+            (
+                AnnouncementFormat::Detailed,
+                TemperatureUnit::Celsius,
+                "Temperature... 68 degrees fahrenheit... 20 degrees celsius...",
+            ),
+        ];
+
+        for (format, unit, expected) in cases {
+            let announcement = announcement_at(&metar, &format, unit, OBSERVED_AT);
+            assert!(announcement.contains(expected), "{announcement}");
+        }
+    }
+
+    #[test]
     fn temperatures_are_rounded_to_whole_degrees() {
         let metar = MetarData {
             temp: Some(21.5),
@@ -413,7 +482,10 @@ mod tests {
                 AnnouncementFormat::Detailed,
                 "minus 40 degrees fahrenheit... minus 40 degrees celsius",
             ),
-            (AnnouncementFormat::Aviation, "Temperature minus 40 degrees"),
+            (
+                AnnouncementFormat::Aviation,
+                "Temperature minus 40 degrees fahrenheit",
+            ),
         ];
 
         for (format, expected) in cases {

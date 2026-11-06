@@ -2,7 +2,7 @@ use clap::{Args, Parser, Subcommand};
 use weather::{
     fetch_weather_data,
     tts::{
-        AnnouncementFormat, AudioFormat, Voice,
+        AnnouncementFormat, AudioFormat, TemperatureUnit, Voice,
         espeak::{EspeakTts, EspeakVoice},
         execute_tts_output, generate_weather_announcement,
         google_tts::GoogleTts,
@@ -34,6 +34,10 @@ struct CommonArgs {
     /// Output format for announcement
     #[arg(short, long, value_enum, default_value = "speech")]
     format: AnnouncementFormat,
+
+    /// Temperature unit (the detailed format always gives both)
+    #[arg(short, long, value_enum, default_value = "fahrenheit")]
+    temp_unit: TemperatureUnit,
 
     /// Save output to file instead of speaking/printing
     #[arg(short, long)]
@@ -108,7 +112,8 @@ fn handle_espeak(args: EspeakArgs) -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let metar = fetch_weather_data(&args.common.icao)?;
-    let announcement = generate_weather_announcement(&metar, &args.common.format);
+    let announcement =
+        generate_weather_announcement(&metar, &args.common.format, args.common.temp_unit);
     println!("Announcement text: {}\n", announcement);
 
     let voice = create_espeak_voice(args.voice, args.speed, args.pitch, args.gap);
@@ -130,7 +135,8 @@ fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let metar = fetch_weather_data(&args.common.icao)?;
-    let announcement = generate_weather_announcement(&metar, &args.common.format);
+    let announcement =
+        generate_weather_announcement(&metar, &args.common.format, args.common.temp_unit);
     println!("Announcement text: {}\n", announcement);
 
     // Get Google Cloud API key from environment
@@ -155,7 +161,8 @@ fn handle_text(args: TextArgs) -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let metar = fetch_weather_data(&args.common.icao)?;
-    let announcement = generate_weather_announcement(&metar, &args.common.format);
+    let announcement =
+        generate_weather_announcement(&metar, &args.common.format, args.common.temp_unit);
 
     if let Some(output_path) = args.common.output {
         std::fs::write(&output_path, &announcement)?;
@@ -228,5 +235,11 @@ mod tests {
         for engine in ["espeak", "google"] {
             assert!(Cli::try_parse_from(["speak-weather", engine, "-a", "wav", "KSJC"]).is_err());
         }
+    }
+
+    #[test]
+    fn temperature_unit_can_be_chosen() {
+        Cli::try_parse_from(["speak-weather", "text", "-t", "celsius", "KSJC"]).unwrap();
+        assert!(Cli::try_parse_from(["speak-weather", "text", "-t", "kelvin", "KSJC"]).is_err());
     }
 }
