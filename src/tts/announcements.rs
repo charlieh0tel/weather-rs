@@ -19,6 +19,15 @@ fn spell_out_icao(icao: &str) -> String {
         .join(" ")
 }
 
+fn spoken_degrees(degrees: f64) -> String {
+    let rounded = degrees.round() as i32;
+    if rounded < 0 {
+        format!("minus {}", rounded.unsigned_abs())
+    } else {
+        rounded.to_string()
+    }
+}
+
 pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFormat) -> String {
     // NSW ("no significant weather") reports an absence of weather, not an unrecognized code.
     let wx_string = metar.wx_string.as_deref().filter(|wx| wx.trim() != "NSW");
@@ -35,7 +44,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                 let temp_f = celsius_to_fahrenheit(temp_c);
                 announcement.push_str(&format!(
                     "Temperature... {} degrees fahrenheit... ",
-                    temp_f.round() as i32
+                    spoken_degrees(temp_f)
                 ));
             }
 
@@ -73,8 +82,8 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                 let temp_f = celsius_to_fahrenheit(temp_c);
                 announcement.push_str(&format!(
                     "Temperature... {} degrees fahrenheit... {} degrees celsius... ",
-                    temp_f.round() as i32,
-                    temp_c.round() as i32
+                    spoken_degrees(temp_f),
+                    spoken_degrees(temp_c)
                 ));
             } else {
                 announcement.push_str("Temperature... not available... ");
@@ -109,7 +118,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                 let temp_f = celsius_to_fahrenheit(temp_c);
                 announcement.push_str(&format!(
                     "Temperature {} degrees... ",
-                    temp_f.round() as i32
+                    spoken_degrees(temp_f)
                 ));
             }
 
@@ -291,16 +300,40 @@ mod tests {
     }
 
     #[test]
-    fn negative_temperatures_are_announced() {
+    fn negative_temperatures_are_spoken_as_minus() {
         let metar = MetarData {
             temp: Some(-40.0),
+            ..bare_metar()
+        };
+
+        let cases = [
+            (AnnouncementFormat::Speech, "minus 40 degrees fahrenheit"),
+            (AnnouncementFormat::Brief, "minus 40 degrees fahrenheit"),
+            (
+                AnnouncementFormat::Detailed,
+                "minus 40 degrees fahrenheit... minus 40 degrees celsius",
+            ),
+            (AnnouncementFormat::Aviation, "Temperature minus 40 degrees"),
+        ];
+
+        for (format, expected) in cases {
+            let announcement = generate_weather_announcement(&metar, &format);
+            assert!(announcement.contains(expected), "{announcement}");
+            assert!(!announcement.contains("-40"), "{announcement}");
+        }
+    }
+
+    #[test]
+    fn temperatures_rounding_to_zero_are_not_negative() {
+        let metar = MetarData {
+            temp: Some(-0.4),
             ..bare_metar()
         };
 
         let announcement = generate_weather_announcement(&metar, &AnnouncementFormat::Detailed);
 
         assert!(
-            announcement.contains("-40 degrees fahrenheit... -40 degrees celsius"),
+            announcement.contains("31 degrees fahrenheit... 0 degrees celsius"),
             "{announcement}"
         );
     }
