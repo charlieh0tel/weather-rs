@@ -182,6 +182,9 @@ pub struct MetarData {
     pub icao_id: String,
     #[serde(rename = "rawOb")]
     pub raw_ob: String,
+    /// Time of the observation, in seconds since the Unix epoch.
+    #[serde(rename = "obsTime")]
+    pub obs_time: Option<i64>,
     pub temp: Option<f64>,
     #[serde(rename = "wxString")]
     pub wx_string: Option<String>,
@@ -292,6 +295,7 @@ mod tests {
             r#"{
                 "icaoId": "KSFO",
                 "rawOb": "METAR KSFO 061256Z -RA BR",
+                "obsTime": 1793983980,
                 "temp": 12.5,
                 "wxString": "-RA BR",
                 "name": "San Francisco Intl, CA, US",
@@ -302,6 +306,7 @@ mod tests {
 
         assert_eq!(metar.icao_id, "KSFO");
         assert_eq!(metar.raw_ob, "METAR KSFO 061256Z -RA BR");
+        assert_eq!(metar.obs_time, Some(1793983980));
         assert_eq!(metar.temp, Some(12.5));
         assert_eq!(metar.wx_string.as_deref(), Some("-RA BR"));
         assert_eq!(metar.name.as_deref(), Some("San Francisco Intl, CA, US"));

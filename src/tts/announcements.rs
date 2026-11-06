@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::{
     MetarData, WeatherGroup, celsius_to_fahrenheit, expand_station_name, parse_weather_groups,
 };
@@ -14,11 +16,43 @@ pub enum AnnouncementFormat {
     Aviation,
 }
 
+const SECONDS_PER_DAY: i64 = 24 * 60 * 60;
+const STALE_AFTER_MINUTES: i64 = 90;
+
 fn spell_out_icao(icao: &str) -> String {
     icao.chars()
         .map(|c| c.to_string())
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn spoken_digits(number: i64, width: usize) -> String {
+    const DIGITS: [&str; 10] = [
+        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+    ];
+    format!("{number:0width$}")
+        .bytes()
+        .map(|digit| DIGITS[usize::from(digit - b'0')])
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn spoken_observation(obs_time: Option<i64>, now: i64) -> String {
+    let Some(obs_time) = obs_time else {
+        return "Observation time not available... ".to_string();
+    };
+
+    let minutes_of_day = obs_time.rem_euclid(SECONDS_PER_DAY) / 60;
+    let time = minutes_of_day / 60 * 100 + minutes_of_day % 60;
+    let mut spoken = format!("Observed {} zulu... ", spoken_digits(time, 4));
+
+    let age_minutes = (now - obs_time) / 60;
+    if age_minutes > STALE_AFTER_MINUTES {
+        spoken.push_str(&format!(
+            "Warning... this report is {age_minutes} minutes old... "
+        ));
+    }
+    spoken
 }
 
 fn spoken_group(group: &WeatherGroup) -> &str {
@@ -38,6 +72,14 @@ fn spoken_degrees(degrees: f64) -> String {
 }
 
 pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFormat) -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs() as i64);
+    announcement_at(metar, format, now)
+}
+
+fn announcement_at(metar: &MetarData, format: &AnnouncementFormat, now: i64) -> String {
+    let observation = spoken_observation(metar.obs_time, now);
     let groups = metar
         .wx_string
         .as_deref()
@@ -52,6 +94,8 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                 announcement.push_str(&format!("{}... ", expand_station_name(name)));
             }
 
+            announcement.push_str(&observation);
+
             if let Some(temp_c) = metar.temp {
                 let temp_f = celsius_to_fahrenheit(temp_c);
                 announcement.push_str(&format!(
@@ -63,7 +107,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
             if groups.is_empty() {
                 announcement.push_str("No significant weather reported...");
             } else {
-                announcement.push_str("Current conditions... ");
+                announcement.push_str("Conditions... ");
                 let conditions: Vec<&str> = groups.iter().map(spoken_group).collect();
                 announcement.push_str(&conditions.join("... "));
                 announcement.push_str("...");
@@ -83,6 +127,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
             }
 
             announcement.push_str(&format!("Raw METAR... {}... ", metar.raw_ob));
+            announcement.push_str(&observation);
 
             if let Some(temp_c) = metar.temp {
                 let temp_f = celsius_to_fahrenheit(temp_c);
@@ -113,6 +158,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
 
         AnnouncementFormat::Aviation => {
             let mut announcement = format!("{} weather... ", spell_out_icao(&metar.icao_id));
+            announcement.push_str(&observation);
 
             if let Some(temp_c) = metar.temp {
                 let temp_f = celsius_to_fahrenheit(temp_c);
@@ -141,11 +187,18 @@ mod tests {
     use super::*;
 
     const RAW_OB: &str = "METAR KSFO 061256Z -RA BR";
+    // 16:28 UTC
+    const OBSERVED_AT: i64 = 20_000 * SECONDS_PER_DAY + 16 * 3600 + 28 * 60;
+
+    fn announce(metar: &MetarData, format: &AnnouncementFormat) -> String {
+        announcement_at(metar, format, OBSERVED_AT + 600)
+    }
 
     fn bare_metar() -> MetarData {
         MetarData {
             icao_id: "KSFO".to_string(),
             raw_ob: RAW_OB.to_string(),
+            obs_time: Some(OBSERVED_AT),
             temp: None,
             wx_string: None,
             name: None,
@@ -173,21 +226,21 @@ mod tests {
         let cases = [
             (
                 full_metar(),
-                "Weather for K S F O... San Francisco International, California, U S... Temperature... 68 degrees fahrenheit... Current conditions... Light rain... Mist...",
+                "Weather for K S F O... San Francisco International, California, U S... Observed one six two eight zulu... Temperature... 68 degrees fahrenheit... Conditions... Light rain... Mist...",
             ),
             (
                 bare_metar(),
-                "Weather for K S F O... No significant weather reported...",
+                "Weather for K S F O... Observed one six two eight zulu... No significant weather reported...",
             ),
             (
                 unrecognized_wx_metar(),
-                "Weather for K S F O... Current conditions... Unrecognized weather...",
+                "Weather for K S F O... Observed one six two eight zulu... Conditions... Unrecognized weather...",
             ),
         ];
 
         for (metar, expected) in cases {
             for format in [AnnouncementFormat::Speech, AnnouncementFormat::Brief] {
-                assert_eq!(generate_weather_announcement(&metar, &format), expected);
+                assert_eq!(announce(&metar, &format), expected);
             }
         }
     }
@@ -198,28 +251,25 @@ mod tests {
             (
                 full_metar(),
                 format!(
-                    "Detailed weather report for K S F O... San Francisco International, California, U S... Raw METAR... {RAW_OB}... Temperature... 68 degrees fahrenheit... 20 degrees celsius... Weather string... -RA BR... Weather codes found... Light rain (-RA)... Mist (BR)..."
+                    "Detailed weather report for K S F O... San Francisco International, California, U S... Raw METAR... {RAW_OB}... Observed one six two eight zulu... Temperature... 68 degrees fahrenheit... 20 degrees celsius... Weather string... -RA BR... Weather codes found... Light rain (-RA)... Mist (BR)..."
                 ),
             ),
             (
                 bare_metar(),
                 format!(
-                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Temperature... not available... Weather... none reported... No weather codes found..."
+                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Observed one six two eight zulu... Temperature... not available... Weather... none reported... No weather codes found..."
                 ),
             ),
             (
                 unrecognized_wx_metar(),
                 format!(
-                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Temperature... not available... Weather string... XX... Weather codes found... Unrecognized weather (XX)..."
+                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Observed one six two eight zulu... Temperature... not available... Weather string... XX... Weather codes found... Unrecognized weather (XX)..."
                 ),
             ),
         ];
 
         for (metar, expected) in cases {
-            assert_eq!(
-                generate_weather_announcement(&metar, &AnnouncementFormat::Detailed),
-                expected
-            );
+            assert_eq!(announce(&metar, &AnnouncementFormat::Detailed), expected);
         }
     }
 
@@ -228,23 +278,20 @@ mod tests {
         let cases = [
             (
                 full_metar(),
-                "K S F O weather... Temperature 68 degrees... Light rain... Mist... End weather...",
+                "K S F O weather... Observed one six two eight zulu... Temperature 68 degrees... Light rain... Mist... End weather...",
             ),
             (
                 bare_metar(),
-                "K S F O weather... No significant weather reported... End weather...",
+                "K S F O weather... Observed one six two eight zulu... No significant weather reported... End weather...",
             ),
             (
                 unrecognized_wx_metar(),
-                "K S F O weather... Unrecognized weather... End weather...",
+                "K S F O weather... Observed one six two eight zulu... Unrecognized weather... End weather...",
             ),
         ];
 
         for (metar, expected) in cases {
-            assert_eq!(
-                generate_weather_announcement(&metar, &AnnouncementFormat::Aviation),
-                expected
-            );
+            assert_eq!(announce(&metar, &AnnouncementFormat::Aviation), expected);
         }
     }
 
@@ -256,12 +303,12 @@ mod tests {
         };
 
         assert_eq!(
-            generate_weather_announcement(&metar, &AnnouncementFormat::Speech),
-            "Weather for K S F O... Current conditions... Unknown precipitation..."
+            announce(&metar, &AnnouncementFormat::Speech),
+            "Weather for K S F O... Observed one six two eight zulu... Conditions... Unknown precipitation..."
         );
         assert_eq!(
-            generate_weather_announcement(&metar, &AnnouncementFormat::Aviation),
-            "K S F O weather... Unknown precipitation... End weather..."
+            announce(&metar, &AnnouncementFormat::Aviation),
+            "K S F O weather... Observed one six two eight zulu... Unknown precipitation... End weather..."
         );
     }
 
@@ -278,10 +325,7 @@ mod tests {
             AnnouncementFormat::Detailed,
             AnnouncementFormat::Aviation,
         ] {
-            assert_eq!(
-                generate_weather_announcement(&metar, &format),
-                generate_weather_announcement(&bare_metar(), &format)
-            );
+            assert_eq!(announce(&metar, &format), announce(&bare_metar(), &format));
         }
     }
 
@@ -293,8 +337,50 @@ mod tests {
         };
 
         assert_eq!(
-            generate_weather_announcement(&metar, &AnnouncementFormat::Aviation),
-            "K S F O weather... Thunderstorm in the vicinity... Light freezing rain... End weather..."
+            announce(&metar, &AnnouncementFormat::Aviation),
+            "K S F O weather... Observed one six two eight zulu... Thunderstorm in the vicinity... Light freezing rain... End weather..."
+        );
+    }
+
+    #[test]
+    fn speaks_the_observation_time_with_leading_zeros() {
+        let cases = [
+            (0, "Observed zero zero zero zero zulu... "),
+            (9 * 60 + 5, "Observed zero nine zero five zulu... "),
+            (23 * 60 + 59, "Observed two three five nine zulu... "),
+        ];
+
+        for (minutes, expected) in cases {
+            let obs_time = 20_000 * SECONDS_PER_DAY + minutes * 60;
+            assert_eq!(spoken_observation(Some(obs_time), obs_time), expected);
+        }
+    }
+
+    #[test]
+    fn warns_only_about_old_reports() {
+        let warned = |minutes: i64| {
+            spoken_observation(Some(OBSERVED_AT), OBSERVED_AT + minutes * 60).contains("Warning")
+        };
+
+        assert!(!warned(0));
+        assert!(!warned(90));
+        assert!(warned(91));
+        assert!(
+            spoken_observation(Some(OBSERVED_AT), OBSERVED_AT + 125 * 60)
+                .contains("this report is 125 minutes old")
+        );
+    }
+
+    #[test]
+    fn says_when_the_observation_time_is_missing() {
+        let metar = MetarData {
+            obs_time: None,
+            ..bare_metar()
+        };
+
+        assert!(
+            announce(&metar, &AnnouncementFormat::Aviation)
+                .contains("Observation time not available")
         );
     }
 
@@ -305,7 +391,7 @@ mod tests {
             ..bare_metar()
         };
 
-        let announcement = generate_weather_announcement(&metar, &AnnouncementFormat::Detailed);
+        let announcement = announce(&metar, &AnnouncementFormat::Detailed);
 
         assert!(
             announcement.contains("71 degrees fahrenheit... 22 degrees celsius"),
@@ -331,7 +417,7 @@ mod tests {
         ];
 
         for (format, expected) in cases {
-            let announcement = generate_weather_announcement(&metar, &format);
+            let announcement = announce(&metar, &format);
             assert!(announcement.contains(expected), "{announcement}");
             assert!(!announcement.contains("-40"), "{announcement}");
         }
@@ -344,7 +430,7 @@ mod tests {
             ..bare_metar()
         };
 
-        let announcement = generate_weather_announcement(&metar, &AnnouncementFormat::Detailed);
+        let announcement = announce(&metar, &AnnouncementFormat::Detailed);
 
         assert!(
             announcement.contains("31 degrees fahrenheit... 0 degrees celsius"),
