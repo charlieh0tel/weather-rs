@@ -11,3 +11,18 @@ Co.=County
 
 # Common
 Arpt=Airport
+AAF=Army Air Field
+AFB=Air Force Base
+Cnty=County
+Exec=Executive
+Fld=Field
+Ft=Fort
+Isl=Island
+Mem=Memorial
+Mt=Mount
+Mtn=Mountain
+Muni=Municipal
+NAS=Naval Air Station
+Pt=Point
+Rgnl=Regional
+St=Saint

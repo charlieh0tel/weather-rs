@@ -93,7 +93,8 @@ pub fn expand_station_name(name: &str) -> String {
         return expand_abbreviations(name);
     };
 
-    let site = expand_abbreviations(site);
+    // A comma makes a pause, where "/" would be read out as "slash".
+    let site = expand_abbreviations(site).replace('/', ", ");
     if country != "US" {
         return site;
     }
@@ -138,7 +139,6 @@ mod tests {
         let cases = [
             "Unknown Field",
             "intl",
-            "St",
             "U.S.",
             "...",
             "Xx.Hood",
@@ -165,15 +165,31 @@ mod tests {
                 "Anchorage International, Alaska, U S",
             ),
             ("Somewhere Arpt, , US", "Somewhere Airport, U S"),
-            ("Bogota/El Dorado Arpt, CA, CO", "Bogota/El Dorado Airport"),
-            ("Oslo/Gardermoen Arpt, AK, NO", "Oslo/Gardermoen Airport"),
+            ("Bogota/El Dorado Arpt, CA, CO", "Bogota, El Dorado Airport"),
+            ("Oslo/Gardermoen Arpt, AK, NO", "Oslo, Gardermoen Airport"),
             (
                 "Mumbai/Shivaji Intl, MM, IN",
-                "Mumbai/Shivaji International",
+                "Mumbai, Shivaji International",
             ),
-            ("San Juan/Marin Intl, , PR", "San Juan/Marin International"),
+            ("San Juan/Marin Intl, , PR", "San Juan, Marin International"),
             ("No Fields Arpt", "No Fields Airport"),
             ("One, Comma", "One, Comma"),
+            (
+                "Bar Harbor/Hancock Cnty, ME, US",
+                "Bar Harbor, Hancock County, Maine, U S",
+            ),
+            (
+                "Dallas-Ft Worth Intl, TX, US",
+                "Dallas-Fort Worth International, Texas, U S",
+            ),
+            (
+                "St Louis/Lambert Intl, MO, US",
+                "Saint Louis, Lambert International, Missouri, U S",
+            ),
+            (
+                "Abilene/Dyess AFB, TX, US",
+                "Abilene, Dyess Air Force Base, Texas, U S",
+            ),
         ];
 
         for (name, expected) in cases {
