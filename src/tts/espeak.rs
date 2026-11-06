@@ -202,14 +202,14 @@ impl EspeakVoice {
 
     pub fn uk_female() -> Self {
         Self {
-            name: "en-gb+f3".to_string(),
+            name: "en+f3".to_string(),
             ..Self::us_female()
         }
     }
 
     pub fn uk_male() -> Self {
         Self {
-            name: "en-gb+m3".to_string(),
+            name: "en+m3".to_string(),
             ..Self::us_male()
         }
     }
@@ -329,5 +329,22 @@ mod tests {
             tts.synthesize(TEXT, &AudioFormat::Wav),
             Err(TtsError::SynthesisError(_))
         ));
+    }
+
+    #[test]
+    fn every_voice_preset_is_known_to_espeak() {
+        for voice in [
+            Voice::Default,
+            Voice::UsFemale,
+            Voice::UsMale,
+            Voice::UkFemale,
+            Voice::UkMale,
+        ] {
+            let tts = EspeakTts::new(voice.clone().into()).unwrap();
+            assert!(
+                tts.synthesize(TEXT, &AudioFormat::Wav).is_ok(),
+                "voice: {voice:?}"
+            );
+        }
     }
 }
