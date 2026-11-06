@@ -8,7 +8,7 @@ use crate::{
 pub enum AnnouncementFormat {
     /// Direct speech output
     Speech,
-    /// Brief announcement format
+    /// Brief announcement format, without the station name
     Brief,
     /// Detailed weather report
     Detailed,
@@ -116,7 +116,7 @@ fn announcement_at(
         AnnouncementFormat::Speech | AnnouncementFormat::Brief => {
             let mut announcement = format!("Weather for {}... ", spell_out_icao(&metar.icao_id));
 
-            if let Some(ref name) = metar.name {
+            if let (AnnouncementFormat::Speech, Some(name)) = (format, &metar.name) {
                 announcement.push_str(&format!("{}... ", expand_station_name(name)));
             }
 
@@ -251,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn speech_and_brief_announcements() {
+    fn speech_announcements() {
         let cases = [
             (
                 full_metar(),
@@ -268,10 +268,16 @@ mod tests {
         ];
 
         for (metar, expected) in cases {
-            for format in [AnnouncementFormat::Speech, AnnouncementFormat::Brief] {
-                assert_eq!(announce(&metar, &format), expected);
-            }
+            assert_eq!(announce(&metar, &AnnouncementFormat::Speech), expected);
         }
+    }
+
+    #[test]
+    fn brief_announcements_omit_the_station_name() {
+        assert_eq!(
+            announce(&full_metar(), &AnnouncementFormat::Brief),
+            "Weather for K S F O... Observed one six two eight zulu... Temperature... 68 degrees fahrenheit... Conditions... Light rain... Mist..."
+        );
     }
 
     #[test]
