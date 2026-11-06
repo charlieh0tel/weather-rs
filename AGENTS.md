@@ -12,4 +12,8 @@
 - PRs should generally be comprised of one functional change; suggest
   making a commit before moving onto something unrelated.
 - CLI code can use anyhow!  library code must not use anyhow!
+- Shell scripts must follow the Google Shell Style Guide
+  (https://google.github.io/styleguide/shellguide.html).
+- `shellcheck` must pass on all shell scripts before commits.  Ask first
+  before adding any waiver (e.g. a `# shellcheck disable=` directive).
 - source ~/google_cloud_tts_api.shfrag to get the api key for google-tts
