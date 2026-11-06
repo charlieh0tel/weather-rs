@@ -20,6 +20,9 @@ fn spell_out_icao(icao: &str) -> String {
 }
 
 pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFormat) -> String {
+    // NSW ("no significant weather") reports an absence of weather, not an unrecognized code.
+    let wx_string = metar.wx_string.as_deref().filter(|wx| wx.trim() != "NSW");
+
     match format {
         AnnouncementFormat::Speech | AnnouncementFormat::Brief => {
             let mut announcement = format!("Weather for {}... ", spell_out_icao(&metar.icao_id));
@@ -36,7 +39,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                 ));
             }
 
-            if let Some(ref wx) = metar.wx_string {
+            if let Some(wx) = wx_string {
                 let codes = parse_wmo_codes(wx);
                 if !codes.is_empty() {
                     announcement.push_str("Current conditions... ");
@@ -77,7 +80,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                 announcement.push_str("Temperature... not available... ");
             }
 
-            if let Some(ref wx) = metar.wx_string {
+            if let Some(wx) = wx_string {
                 announcement.push_str(&format!("Weather string... {}... ", wx));
                 let codes = parse_wmo_codes(wx);
                 if !codes.is_empty() {
@@ -110,7 +113,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                 ));
             }
 
-            if let Some(ref wx) = metar.wx_string {
+            if let Some(wx) = wx_string {
                 let codes = parse_wmo_codes(wx);
                 if !codes.is_empty() {
                     for code in codes {
@@ -250,6 +253,26 @@ mod tests {
             generate_weather_announcement(&metar, &AnnouncementFormat::Aviation),
             "K S F O weather... Unknown Precipitation... End weather..."
         );
+    }
+
+    #[test]
+    fn no_significant_weather_is_announced_like_no_weather() {
+        let metar = MetarData {
+            wx_string: Some("NSW".to_string()),
+            ..bare_metar()
+        };
+
+        for format in [
+            AnnouncementFormat::Speech,
+            AnnouncementFormat::Brief,
+            AnnouncementFormat::Detailed,
+            AnnouncementFormat::Aviation,
+        ] {
+            assert_eq!(
+                generate_weather_announcement(&metar, &format),
+                generate_weather_announcement(&bare_metar(), &format)
+            );
+        }
     }
 
     #[test]
