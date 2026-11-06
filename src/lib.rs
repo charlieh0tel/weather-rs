@@ -5,7 +5,7 @@ mod abbreviations;
 pub mod tts;
 mod weather_groups;
 
-pub use abbreviations::expand_abbreviations;
+pub use abbreviations::{expand_abbreviations, expand_station_name};
 pub use weather_groups::{WeatherGroup, parse_weather_groups};
 
 #[derive(Debug)]

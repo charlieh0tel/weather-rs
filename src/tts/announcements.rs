@@ -1,5 +1,5 @@
 use crate::{
-    MetarData, WeatherGroup, celsius_to_fahrenheit, expand_abbreviations, parse_weather_groups,
+    MetarData, WeatherGroup, celsius_to_fahrenheit, expand_station_name, parse_weather_groups,
 };
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -49,7 +49,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
             let mut announcement = format!("Weather for {}... ", spell_out_icao(&metar.icao_id));
 
             if let Some(ref name) = metar.name {
-                announcement.push_str(&format!("{}... ", expand_abbreviations(name)));
+                announcement.push_str(&format!("{}... ", expand_station_name(name)));
             }
 
             if let Some(temp_c) = metar.temp {
@@ -79,7 +79,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
             );
 
             if let Some(ref name) = metar.name {
-                announcement.push_str(&format!("{}... ", expand_abbreviations(name)));
+                announcement.push_str(&format!("{}... ", expand_station_name(name)));
             }
 
             announcement.push_str(&format!("Raw METAR... {}... ", metar.raw_ob));
@@ -156,7 +156,7 @@ mod tests {
         MetarData {
             temp: Some(20.0),
             wx_string: Some("-RA BR".to_string()),
-            name: Some("San Francisco Intl, CA".to_string()),
+            name: Some("San Francisco Intl, CA, US".to_string()),
             ..bare_metar()
         }
     }
@@ -173,7 +173,7 @@ mod tests {
         let cases = [
             (
                 full_metar(),
-                "Weather for K S F O... San Francisco International, California... Temperature... 68 degrees fahrenheit... Current conditions... Light rain... Mist...",
+                "Weather for K S F O... San Francisco International, California, U S... Temperature... 68 degrees fahrenheit... Current conditions... Light rain... Mist...",
             ),
             (
                 bare_metar(),
@@ -198,7 +198,7 @@ mod tests {
             (
                 full_metar(),
                 format!(
-                    "Detailed weather report for K S F O... San Francisco International, California... Raw METAR... {RAW_OB}... Temperature... 68 degrees fahrenheit... 20 degrees celsius... Weather string... -RA BR... Weather codes found... Light rain (-RA)... Mist (BR)..."
+                    "Detailed weather report for K S F O... San Francisco International, California, U S... Raw METAR... {RAW_OB}... Temperature... 68 degrees fahrenheit... 20 degrees celsius... Weather string... -RA BR... Weather codes found... Light rain (-RA)... Mist (BR)..."
                 ),
             ),
             (

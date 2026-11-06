@@ -1,26 +1,33 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+type Table = HashMap<&'static str, &'static str>;
+
 const ABBREV_DATA: &str = include_str!("abbreviations.txt");
+const US_STATE_DATA: &str = include_str!("us_states.txt");
 
-static ABBREVIATIONS: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+static ABBREVIATIONS: OnceLock<Table> = OnceLock::new();
+static US_STATES: OnceLock<Table> = OnceLock::new();
 
-fn get_abbreviations() -> &'static HashMap<&'static str, &'static str> {
-    ABBREVIATIONS.get_or_init(|| {
-        ABBREV_DATA
-            .lines()
-            .filter_map(|line| {
-                let line = line.trim();
-                if line.is_empty() || line.starts_with('#') {
-                    return None;
-                }
-                let mut parts = line.split('=');
-                let abbrev = parts.next()?.trim();
-                let expansion = parts.next()?.trim();
-                Some((abbrev, expansion))
-            })
-            .collect()
-    })
+fn parse_table(data: &'static str) -> Table {
+    data.lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                return None;
+            }
+            let (abbrev, expansion) = line.split_once('=')?;
+            Some((abbrev.trim(), expansion.trim()))
+        })
+        .collect()
+}
+
+fn get_abbreviations() -> &'static Table {
+    ABBREVIATIONS.get_or_init(|| parse_table(ABBREV_DATA))
+}
+
+fn get_us_states() -> &'static Table {
+    US_STATES.get_or_init(|| parse_table(US_STATE_DATA))
 }
 
 fn push_expanded(result: &mut String, word: &str) {
@@ -75,6 +82,27 @@ pub fn expand_abbreviations(text: &str) -> String {
     result
 }
 
+/// Makes a station name from the API (`site, state, country`) fit to speak.
+///
+/// State and country codes are only spoken for US stations, because elsewhere they read as US
+/// states: "CA, CO" is Cundinamarca, Colombia.
+pub fn expand_station_name(name: &str) -> String {
+    let mut fields = name.rsplitn(3, ", ");
+    let (Some(country), Some(state), Some(site)) = (fields.next(), fields.next(), fields.next())
+    else {
+        return expand_abbreviations(name);
+    };
+
+    let site = expand_abbreviations(site);
+    if country != "US" {
+        return site;
+    }
+    match get_us_states().get(state) {
+        Some(state) => format!("{site}, {state}, U S"),
+        None => format!("{site}, U S"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,16 +115,16 @@ mod tests {
             ("Intl", "International"),
             ("San Jose Arpt", "San Jose Airport"),
             ("Intl Arpt", "International Airport"),
-            ("San Jose Intl, CA", "San Jose International, California"),
+            ("San Jose Intl, CA", "San Jose International, CA"),
             ("St. Louis", "Saint Louis"),
-            ("Ft. Worth, TX", "Fort Worth, Texas"),
+            ("Ft. Worth, TX", "Fort Worth, TX"),
             ("Arpt2", "Airport2"),
             ("Zürich Intl", "Zürich International"),
             ("Intl.", "International."),
-            ("Near San Jose, CA.", "Near San Jose, California."),
+            ("Near San Jose Arpt.", "Near San Jose Airport."),
             ("Arpt...", "Airport..."),
             ("Mt.Hood", "Mount Hood"),
-            ("St.Louis, MO", "Saint Louis, Missouri"),
+            ("St.Louis, MO", "Saint Louis, MO"),
             ("Ft.Worth.", "Fort Worth."),
         ];
 
@@ -126,26 +154,56 @@ mod tests {
     }
 
     #[test]
+    fn expands_station_names() {
+        let cases = [
+            (
+                "San Jose Intl Arpt, CA, US",
+                "San Jose International Airport, California, U S",
+            ),
+            (
+                "Anchorage Intl, AK, US",
+                "Anchorage International, Alaska, U S",
+            ),
+            ("Somewhere Arpt, , US", "Somewhere Airport, U S"),
+            ("Bogota/El Dorado Arpt, CA, CO", "Bogota/El Dorado Airport"),
+            ("Oslo/Gardermoen Arpt, AK, NO", "Oslo/Gardermoen Airport"),
+            (
+                "Mumbai/Shivaji Intl, MM, IN",
+                "Mumbai/Shivaji International",
+            ),
+            ("San Juan/Marin Intl, , PR", "San Juan/Marin International"),
+            ("No Fields Arpt", "No Fields Airport"),
+            ("One, Comma", "One, Comma"),
+        ];
+
+        for (name, expected) in cases {
+            assert_eq!(expand_station_name(name), expected, "name: {name:?}");
+        }
+    }
+
+    #[test]
     fn abbreviation_data_is_well_formed() {
-        let mut seen = HashSet::new();
+        for data in [ABBREV_DATA, US_STATE_DATA] {
+            let mut seen = HashSet::new();
 
-        for line in ABBREV_DATA
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        {
-            let (abbrev, expansion) = line
-                .split_once('=')
-                .unwrap_or_else(|| panic!("missing '=': {line:?}"));
-            let (abbrev, expansion) = (abbrev.trim(), expansion.trim());
+            for line in data
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            {
+                let (abbrev, expansion) = line
+                    .split_once('=')
+                    .unwrap_or_else(|| panic!("missing '=': {line:?}"));
+                let (abbrev, expansion) = (abbrev.trim(), expansion.trim());
 
-            assert!(!expansion.is_empty(), "empty expansion: {line:?}");
-            assert!(!expansion.contains('='), "extra '=': {line:?}");
-            assert!(
-                !abbrev.is_empty() && abbrev.chars().all(|c| c.is_alphabetic() || c == '.'),
-                "abbreviation can never match a word: {line:?}"
-            );
-            assert!(seen.insert(abbrev), "duplicate abbreviation: {line:?}");
+                assert!(!expansion.is_empty(), "empty expansion: {line:?}");
+                assert!(!expansion.contains('='), "extra '=': {line:?}");
+                assert!(
+                    !abbrev.is_empty() && abbrev.chars().all(|c| c.is_alphabetic() || c == '.'),
+                    "abbreviation can never match a word: {line:?}"
+                );
+                assert!(seen.insert(abbrev), "duplicate abbreviation: {line:?}");
+            }
         }
     }
 }
