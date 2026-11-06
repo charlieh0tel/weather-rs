@@ -179,7 +179,15 @@ pub fn celsius_to_fahrenheit(c: f64) -> f64 {
 pub fn parse_wmo_codes(wx_string: &str) -> Vec<WmoCode> {
     WmoCode::all_codes()
         .into_iter()
-        .filter(|code| wx_string.contains(code.code()))
+        .filter(|code| {
+            wx_string.split_whitespace().any(|group| {
+                group
+                    .trim_start_matches(['+', '-'])
+                    .as_bytes()
+                    .chunks(2)
+                    .any(|pair| pair == code.code().as_bytes())
+            })
+        })
         .collect()
 }
 
@@ -246,5 +254,97 @@ pub fn display_weather(metar: &MetarData) {
     } else {
         println!("Weather: Clear/Not reported");
         println!("WMO Codes Found: None");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WmoCode::*;
+    use super::*;
+
+    #[test]
+    fn parses_wmo_codes() {
+        let cases = [
+            ("", vec![]),
+            ("RA", vec![Rain]),
+            ("-RA", vec![Rain]),
+            ("+RA", vec![Rain]),
+            ("+FC", vec![FunnelCloud]),
+            ("VCFG", vec![Fog]),
+            ("BCFG", vec![Fog]),
+            ("FZRA", vec![Rain]),
+            ("-RA BR", vec![Rain, Mist]),
+            ("RA RA", vec![Rain]),
+            ("-SHRASN", vec![Rain, Snow]),
+            ("+TSRA", vec![Rain, Thunderstorm]),
+        ];
+
+        for (wx, expected) in cases {
+            assert_eq!(parse_wmo_codes(wx), expected, "wx string: {wx:?}");
+        }
+    }
+
+    #[test]
+    fn does_not_match_codes_across_group_boundaries() {
+        let cases = [
+            ("TSSN", vec![Snow, Thunderstorm]),
+            ("TSGR", vec![Hail, Thunderstorm]),
+            ("TSGS", vec![SmallHail, Thunderstorm]),
+        ];
+
+        for (wx, expected) in cases {
+            assert_eq!(parse_wmo_codes(wx), expected, "wx string: {wx:?}");
+        }
+    }
+
+    #[test]
+    fn unrecognized_codes_are_ignored() {
+        assert_eq!(parse_wmo_codes("UP"), vec![]);
+    }
+
+    #[test]
+    fn deserializes_full_metar_ignoring_unknown_fields() {
+        let metar: MetarData = serde_json::from_str(
+            r#"{
+                "icaoId": "KSFO",
+                "rawOb": "METAR KSFO 061256Z -RA BR",
+                "temp": 12.5,
+                "wxString": "-RA BR",
+                "name": "San Francisco Intl, CA, US",
+                "elev": 3
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(metar.icao_id, "KSFO");
+        assert_eq!(metar.raw_ob, "METAR KSFO 061256Z -RA BR");
+        assert_eq!(metar.temp, Some(12.5));
+        assert_eq!(metar.wx_string.as_deref(), Some("-RA BR"));
+        assert_eq!(metar.name.as_deref(), Some("San Francisco Intl, CA, US"));
+    }
+
+    #[test]
+    fn deserializes_missing_and_null_optional_fields_as_none() {
+        let documents = [
+            r#"{"icaoId": "KSFO", "rawOb": "RAW"}"#,
+            r#"{"icaoId": "KSFO", "rawOb": "RAW", "temp": null, "wxString": null, "name": null}"#,
+        ];
+
+        for document in documents {
+            let metar: MetarData = serde_json::from_str(document).unwrap();
+            assert_eq!(metar.temp, None, "document: {document}");
+            assert_eq!(metar.wx_string, None, "document: {document}");
+            assert_eq!(metar.name, None, "document: {document}");
+        }
+    }
+
+    #[test]
+    fn rejects_metar_missing_required_fields() {
+        for document in [r#"{"icaoId": "KSFO"}"#, r#"{"rawOb": "RAW"}"#] {
+            assert!(
+                serde_json::from_str::<MetarData>(document).is_err(),
+                "document: {document}"
+            );
+        }
     }
 }

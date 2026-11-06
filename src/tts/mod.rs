@@ -203,3 +203,120 @@ pub fn execute_tts_output<T: TtsBackend>(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    const AUDIO: &[u8] = b"fake audio";
+    const TEXT: &str = "Weather for K S F O...";
+
+    #[derive(Default)]
+    struct MockBackend {
+        fail: bool,
+        synthesized: RefCell<Vec<(String, String)>>,
+        spoken: RefCell<Vec<String>>,
+    }
+
+    impl MockBackend {
+        fn failing() -> Self {
+            Self {
+                fail: true,
+                ..Self::default()
+            }
+        }
+    }
+
+    impl TtsBackend for MockBackend {
+        fn synthesize(&self, text: &str, format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
+            self.synthesized
+                .borrow_mut()
+                .push((text.to_string(), format.to_string()));
+            if self.fail {
+                return Err(TtsError::SynthesisError("mock failure".to_string()));
+            }
+            Ok(AUDIO.to_vec())
+        }
+
+        fn speak(&self, text: &str) -> Result<(), TtsError> {
+            self.spoken.borrow_mut().push(text.to_string());
+            if self.fail {
+                return Err(TtsError::PlaybackError("mock failure".to_string()));
+            }
+            Ok(())
+        }
+
+        fn backend_name(&self) -> &str {
+            "mock"
+        }
+    }
+
+    fn output_path_in(dir: &tempfile::TempDir) -> String {
+        dir.path().join("out.wav").to_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn output_path_synthesizes_and_saves_without_speaking() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = output_path_in(&dir);
+        let tts = MockBackend::default();
+
+        execute_tts_output(&tts, TEXT, Some(path.clone()), &AudioFormat::Wav).unwrap();
+
+        assert_eq!(
+            *tts.synthesized.borrow(),
+            [(TEXT.to_string(), "WAV".to_string())]
+        );
+        assert!(tts.spoken.borrow().is_empty());
+        assert_eq!(std::fs::read(path).unwrap(), AUDIO);
+    }
+
+    #[test]
+    fn no_output_path_speaks_without_synthesizing() {
+        let tts = MockBackend::default();
+
+        execute_tts_output(&tts, TEXT, None, &AudioFormat::Wav).unwrap();
+
+        assert_eq!(*tts.spoken.borrow(), [TEXT]);
+        assert!(tts.synthesized.borrow().is_empty());
+    }
+
+    #[test]
+    fn synthesis_failure_propagates_and_writes_no_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = output_path_in(&dir);
+
+        let result = execute_tts_output(
+            &MockBackend::failing(),
+            TEXT,
+            Some(path.clone()),
+            &AudioFormat::Wav,
+        );
+
+        assert!(matches!(result, Err(TtsError::SynthesisError(_))));
+        assert!(!std::path::Path::new(&path).exists());
+    }
+
+    #[test]
+    fn speak_failure_propagates() {
+        let result = execute_tts_output(&MockBackend::failing(), TEXT, None, &AudioFormat::Wav);
+
+        assert!(matches!(result, Err(TtsError::PlaybackError(_))));
+    }
+
+    #[test]
+    fn unwritable_output_path_is_a_file_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing/out.wav");
+
+        let result = execute_tts_output(
+            &MockBackend::default(),
+            TEXT,
+            Some(path.to_str().unwrap().to_string()),
+            &AudioFormat::Wav,
+        );
+
+        assert!(matches!(result, Err(TtsError::FileError(_))));
+    }
+}

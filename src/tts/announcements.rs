@@ -128,3 +128,140 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RAW_OB: &str = "METAR KSFO 061256Z -RA BR";
+
+    fn bare_metar() -> MetarData {
+        MetarData {
+            icao_id: "KSFO".to_string(),
+            raw_ob: RAW_OB.to_string(),
+            temp: None,
+            wx_string: None,
+            name: None,
+        }
+    }
+
+    fn full_metar() -> MetarData {
+        MetarData {
+            temp: Some(20.0),
+            wx_string: Some("-RA BR".to_string()),
+            name: Some("San Francisco Intl, CA".to_string()),
+            ..bare_metar()
+        }
+    }
+
+    fn unrecognized_wx_metar() -> MetarData {
+        MetarData {
+            wx_string: Some("UP".to_string()),
+            ..bare_metar()
+        }
+    }
+
+    #[test]
+    fn speech_and_brief_announcements() {
+        let cases = [
+            (
+                full_metar(),
+                "Weather for K S F O... San Francisco International, California... Temperature... 68 degrees fahrenheit... Current conditions... Rain... Mist...",
+            ),
+            (bare_metar(), "Weather for K S F O... Clear conditions..."),
+            (
+                unrecognized_wx_metar(),
+                "Weather for K S F O... Clear conditions...",
+            ),
+        ];
+
+        for (metar, expected) in cases {
+            for format in [AnnouncementFormat::Speech, AnnouncementFormat::Brief] {
+                assert_eq!(generate_weather_announcement(&metar, &format), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn detailed_announcements() {
+        let cases = [
+            (
+                full_metar(),
+                format!(
+                    "Detailed weather report for K S F O... San Francisco International, California... Raw METAR... {RAW_OB}... Temperature... 68 degrees fahrenheit... 20 degrees celsius... Weather string... -RA BR... Weather codes found... Rain (RA)... Mist (BR)..."
+                ),
+            ),
+            (
+                bare_metar(),
+                format!(
+                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Temperature... not available... Weather... clear or not reported... No weather codes found..."
+                ),
+            ),
+            (
+                unrecognized_wx_metar(),
+                format!(
+                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Temperature... not available... Weather string... UP... No weather codes found..."
+                ),
+            ),
+        ];
+
+        for (metar, expected) in cases {
+            assert_eq!(
+                generate_weather_announcement(&metar, &AnnouncementFormat::Detailed),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn aviation_announcements() {
+        let cases = [
+            (
+                full_metar(),
+                "K S F O weather... Temperature 68 degrees... Rain... Mist... End weather...",
+            ),
+            (bare_metar(), "K S F O weather... Clear... End weather..."),
+            (
+                unrecognized_wx_metar(),
+                "K S F O weather... Clear... End weather...",
+            ),
+        ];
+
+        for (metar, expected) in cases {
+            assert_eq!(
+                generate_weather_announcement(&metar, &AnnouncementFormat::Aviation),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn temperatures_are_rounded_to_whole_degrees() {
+        let metar = MetarData {
+            temp: Some(21.5),
+            ..bare_metar()
+        };
+
+        let announcement = generate_weather_announcement(&metar, &AnnouncementFormat::Detailed);
+
+        assert!(
+            announcement.contains("71 degrees fahrenheit... 22 degrees celsius"),
+            "{announcement}"
+        );
+    }
+
+    #[test]
+    fn negative_temperatures_are_announced() {
+        let metar = MetarData {
+            temp: Some(-40.0),
+            ..bare_metar()
+        };
+
+        let announcement = generate_weather_announcement(&metar, &AnnouncementFormat::Detailed);
+
+        assert!(
+            announcement.contains("-40 degrees fahrenheit... -40 degrees celsius"),
+            "{announcement}"
+        );
+    }
+}
