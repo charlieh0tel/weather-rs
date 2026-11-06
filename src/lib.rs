@@ -10,6 +10,7 @@ pub use weather_groups::{WeatherGroup, parse_weather_groups};
 
 #[derive(Debug)]
 pub enum WeatherError {
+    InvalidIcao(String),
     HttpClient(String),
     Request(String),
     EmptyResponse(String),
@@ -20,6 +21,11 @@ pub enum WeatherError {
 impl fmt::Display for WeatherError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            WeatherError::InvalidIcao(icao) => write!(
+                f,
+                "Invalid ICAO code '{}': expected 4 letters or digits (e.g., KRHV)",
+                icao
+            ),
             WeatherError::HttpClient(msg) => write!(f, "HTTP client error: {}", msg),
             WeatherError::Request(msg) => write!(f, "Request failed: {}", msg),
             WeatherError::EmptyResponse(icao) => write!(
@@ -186,7 +192,18 @@ pub fn celsius_to_fahrenheit(c: f64) -> f64 {
     (c * 9.0 / 5.0) + 32.0
 }
 
+/// The API also accepts station lists and state selectors, and would then report another airport.
+fn validate_icao(icao: &str) -> Result<()> {
+    if icao.len() == 4 && icao.chars().all(|c| c.is_ascii_alphanumeric()) {
+        Ok(())
+    } else {
+        Err(WeatherError::InvalidIcao(icao.to_string()))
+    }
+}
+
 pub fn fetch_weather_data(icao: &str) -> Result<MetarData> {
+    validate_icao(icao)?;
+
     let url = format!(
         "https://aviationweather.gov/api/data/metar?ids={}&format=json",
         icao.to_uppercase()
@@ -303,6 +320,33 @@ mod tests {
             assert!(
                 serde_json::from_str::<MetarData>(document).is_err(),
                 "document: {document}"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_icao_codes() {
+        for icao in ["KSJC", "ksjc", "K0Q9", "EGLL"] {
+            assert!(validate_icao(icao).is_ok(), "icao: {icao:?}");
+        }
+    }
+
+    #[test]
+    fn rejects_input_the_api_would_treat_as_something_else() {
+        for icao in [
+            "",
+            "K",
+            "SJC",
+            "KSJCX",
+            "KSJC,KSFO",
+            "@ca",
+            " KSJ",
+            "K&=1",
+            "KSJé",
+        ] {
+            assert!(
+                matches!(validate_icao(icao), Err(WeatherError::InvalidIcao(_))),
+                "icao: {icao:?}"
             );
         }
     }
