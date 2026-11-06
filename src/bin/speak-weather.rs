@@ -62,7 +62,7 @@ struct EspeakArgs {
     pitch: u32,
 
     /// Gap between words in 10ms units
-    #[arg(short = 'g', long, default_value = "15")]
+    #[arg(short = 'g', long, default_value = "0")]
     gap: u32,
 }
 

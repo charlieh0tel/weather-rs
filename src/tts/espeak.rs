@@ -2,18 +2,15 @@ use crate::tts::{AudioFormat, TtsBackend, TtsError, Voice};
 use espeakng_sys::{
     espeak_AUDIO_OUTPUT, espeak_AUDIO_OUTPUT_AUDIO_OUTPUT_PLAYBACK,
     espeak_AUDIO_OUTPUT_AUDIO_OUTPUT_SYNCHRONOUS, espeak_ERROR, espeak_ERROR_EE_INTERNAL_ERROR,
-    espeak_ERROR_EE_OK, espeak_EVENT, espeak_Initialize, espeak_POSITION_TYPE_POS_CHARACTER,
-    espeak_SetParameter, espeak_SetSynthCallback, espeak_SetVoiceByName, espeak_Synchronize,
-    espeak_Synth, espeak_Terminate, espeakCHARS_UTF8, espeakINITIALIZE_DONT_EXIT,
+    espeak_ERROR_EE_OK, espeak_EVENT, espeak_Initialize, espeak_PARAMETER_espeakPITCH,
+    espeak_PARAMETER_espeakRATE, espeak_PARAMETER_espeakWORDGAP,
+    espeak_POSITION_TYPE_POS_CHARACTER, espeak_SetParameter, espeak_SetSynthCallback,
+    espeak_SetVoiceByName, espeak_Synchronize, espeak_Synth, espeak_Terminate, espeakCHARS_UTF8,
+    espeakINITIALIZE_DONT_EXIT,
 };
 use std::ffi::CString;
 use std::io::Cursor;
 use std::sync::{Mutex, MutexGuard, PoisonError};
-
-// eSpeak parameter constants
-const ESPEAK_PARAM_RATE: u32 = 1;
-const ESPEAK_PARAM_PITCH: u32 = 2;
-const ESPEAK_PARAM_WORDGAP: u32 = 4;
 
 // eSpeak keeps its state in globals, so only one session can exist at a time.
 static SESSION_LOCK: Mutex<()> = Mutex::new(());
@@ -90,9 +87,9 @@ impl Session {
         )?;
 
         for (parameter, value) in [
-            (ESPEAK_PARAM_RATE, voice.speed),
-            (ESPEAK_PARAM_PITCH, voice.pitch),
-            (ESPEAK_PARAM_WORDGAP, voice.gap),
+            (espeak_PARAMETER_espeakRATE, voice.speed),
+            (espeak_PARAMETER_espeakPITCH, voice.pitch),
+            (espeak_PARAMETER_espeakWORDGAP, voice.gap),
         ] {
             // SAFETY: plain values, and the session holds exclusive use of eSpeak.
             check(
@@ -176,7 +173,7 @@ impl Default for EspeakVoice {
             name: "en-us".to_string(),
             speed: 120,
             pitch: 50,
-            gap: 15,
+            gap: 0,
         }
     }
 }
@@ -187,7 +184,7 @@ impl EspeakVoice {
             name: "en-us+f3".to_string(),
             speed: 120,
             pitch: 60,
-            gap: 15,
+            gap: 0,
         }
     }
 
@@ -196,7 +193,7 @@ impl EspeakVoice {
             name: "en-us+m3".to_string(),
             speed: 120,
             pitch: 40,
-            gap: 15,
+            gap: 0,
         }
     }
 
@@ -346,5 +343,44 @@ mod tests {
                 "voice: {voice:?}"
             );
         }
+    }
+
+    fn tts_with(pitch: u32, gap: u32) -> EspeakTts {
+        EspeakTts::new(EspeakVoice {
+            pitch,
+            gap,
+            ..EspeakVoice::default()
+        })
+        .unwrap()
+    }
+
+    fn rms(samples: &[i16]) -> f64 {
+        let sum: f64 = samples.iter().map(|s| f64::from(*s).powi(2)).sum();
+        (sum / samples.len() as f64).sqrt()
+    }
+
+    #[test]
+    fn pitch_does_not_change_loudness() {
+        let low = rms(&synthesize_samples(&tts_with(0, 0), TEXT));
+        let high = rms(&synthesize_samples(&tts_with(99, 0), TEXT));
+
+        assert!(low > 500.0, "low pitch is nearly silent: {low}");
+        assert!(high / low < 2.0 && low / high < 2.0, "{low} vs {high}");
+    }
+
+    #[test]
+    fn pitch_changes_the_voice() {
+        assert_ne!(
+            synthesize_samples(&tts_with(0, 0), TEXT),
+            synthesize_samples(&tts_with(99, 0), TEXT)
+        );
+    }
+
+    #[test]
+    fn gap_lengthens_speech() {
+        let without = synthesize_samples(&tts_with(50, 0), TEXT).len();
+        let with = synthesize_samples(&tts_with(50, 50), TEXT).len();
+
+        assert!(with > without + without / 10, "{without} vs {with}");
     }
 }
