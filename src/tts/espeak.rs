@@ -1,6 +1,5 @@
 use crate::tts::{AudioFormat, TtsBackend, TtsError, Voice};
 use espeakng_sys::{
-    espeak_AUDIO_OUTPUT, espeak_AUDIO_OUTPUT_AUDIO_OUTPUT_PLAYBACK,
     espeak_AUDIO_OUTPUT_AUDIO_OUTPUT_SYNCHRONOUS, espeak_ERROR, espeak_ERROR_EE_INTERNAL_ERROR,
     espeak_ERROR_EE_OK, espeak_EVENT, espeak_Initialize, espeak_PARAMETER_espeakPITCH,
     espeak_PARAMETER_espeakRATE, espeak_PARAMETER_espeakWORDGAP,
@@ -50,13 +49,13 @@ struct Session {
 }
 
 impl Session {
-    fn open(output: espeak_AUDIO_OUTPUT, voice: &EspeakVoice) -> Result<Self, TtsError> {
+    fn open(voice: &EspeakVoice) -> Result<Self, TtsError> {
         let guard = lock(&SESSION_LOCK);
 
         // SAFETY: the lock gives exclusive use of eSpeak, and a null path means the default data.
         let sample_rate = unsafe {
             espeak_Initialize(
-                output,
+                espeak_AUDIO_OUTPUT_AUDIO_OUTPUT_SYNCHRONOUS,
                 0,
                 std::ptr::null(),
                 espeakINITIALIZE_DONT_EXIT as i32,
@@ -236,7 +235,7 @@ impl EspeakTts {
 
 impl TtsBackend for EspeakTts {
     fn synthesize(&self, text: &str, format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
-        let session = Session::open(espeak_AUDIO_OUTPUT_AUDIO_OUTPUT_SYNCHRONOUS, &self.voice)?;
+        let session = Session::open(&self.voice)?;
 
         lock(&SAMPLES).clear();
         // SAFETY: the callback has the signature eSpeak expects and stays valid for the program.
@@ -258,7 +257,8 @@ impl TtsBackend for EspeakTts {
     }
 
     fn speak(&self, text: &str) -> Result<(), TtsError> {
-        Session::open(espeak_AUDIO_OUTPUT_AUDIO_OUTPUT_PLAYBACK, &self.voice)?.say(text)
+        let wav_data = self.synthesize(text, &AudioFormat::Wav)?;
+        crate::tts::TtsPlayer::play_audio(&wav_data, &AudioFormat::Wav)
     }
 
     fn backend_name(&self) -> &str {
@@ -382,5 +382,12 @@ mod tests {
         let with = synthesize_samples(&tts_with(50, 50), TEXT).len();
 
         assert!(with > without + without / 10, "{without} vs {with}");
+    }
+
+    #[test]
+    fn synthesized_wav_can_be_decoded_for_playback() {
+        let wav = default_tts().synthesize(TEXT, &AudioFormat::Wav).unwrap();
+
+        assert!(rodio::Decoder::new(Cursor::new(wav)).is_ok());
     }
 }
