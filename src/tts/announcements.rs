@@ -60,7 +60,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                     announcement.push_str("Conditions not recognized...");
                 }
             } else {
-                announcement.push_str("Clear conditions...");
+                announcement.push_str("No significant weather reported...");
             }
 
             announcement
@@ -104,8 +104,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                     announcement.push_str("No weather codes found...");
                 }
             } else {
-                announcement
-                    .push_str("Weather... clear or not reported... No weather codes found...");
+                announcement.push_str("Weather... none reported... No weather codes found...");
             }
 
             announcement
@@ -132,7 +131,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                     announcement.push_str("Conditions not recognized... ");
                 }
             } else {
-                announcement.push_str("Clear... ");
+                announcement.push_str("No significant weather reported... ");
             }
 
             announcement.push_str("End weather...");
@@ -180,7 +179,10 @@ mod tests {
                 full_metar(),
                 "Weather for K S F O... San Francisco International, California... Temperature... 68 degrees fahrenheit... Current conditions... Rain... Mist...",
             ),
-            (bare_metar(), "Weather for K S F O... Clear conditions..."),
+            (
+                bare_metar(),
+                "Weather for K S F O... No significant weather reported...",
+            ),
             (
                 unrecognized_wx_metar(),
                 "Weather for K S F O... Conditions not recognized...",
@@ -206,7 +208,7 @@ mod tests {
             (
                 bare_metar(),
                 format!(
-                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Temperature... not available... Weather... clear or not reported... No weather codes found..."
+                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Temperature... not available... Weather... none reported... No weather codes found..."
                 ),
             ),
             (
@@ -232,7 +234,10 @@ mod tests {
                 full_metar(),
                 "K S F O weather... Temperature 68 degrees... Rain... Mist... End weather...",
             ),
-            (bare_metar(), "K S F O weather... Clear... End weather..."),
+            (
+                bare_metar(),
+                "K S F O weather... No significant weather reported... End weather...",
+            ),
             (
                 unrecognized_wx_metar(),
                 "K S F O weather... Conditions not recognized... End weather...",

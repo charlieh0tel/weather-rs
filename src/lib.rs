@@ -256,7 +256,7 @@ pub fn display_weather(metar: &MetarData) {
             println!("WMO Codes Found: None");
         }
     } else {
-        println!("Weather: Clear/Not reported");
+        println!("Weather: None reported");
         println!("WMO Codes Found: None");
     }
 }
