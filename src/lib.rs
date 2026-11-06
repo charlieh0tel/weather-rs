@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use std::fmt;
+use std::time::Duration;
 
 mod abbreviations;
 pub mod tts;
@@ -13,6 +14,7 @@ pub enum WeatherError {
     InvalidIcao(String),
     HttpClient(String),
     Request(String),
+    HttpStatus(reqwest::StatusCode),
     EmptyResponse(String),
     InvalidJson(String),
     NoData(String),
@@ -28,6 +30,9 @@ impl fmt::Display for WeatherError {
             ),
             WeatherError::HttpClient(msg) => write!(f, "HTTP client error: {}", msg),
             WeatherError::Request(msg) => write!(f, "Request failed: {}", msg),
+            WeatherError::HttpStatus(status) => {
+                write!(f, "aviationweather.gov returned HTTP status {}", status)
+            }
             WeatherError::EmptyResponse(icao) => write!(
                 f,
                 "Empty response from API. ICAO code '{}' may not be valid or may not have current weather data. Try adding 'K' prefix for US airports (e.g., KRHV)",
@@ -44,6 +49,19 @@ impl fmt::Display for WeatherError {
 }
 
 impl std::error::Error for WeatherError {}
+
+impl WeatherError {
+    /// Whether the same request might succeed if tried again.
+    fn is_transient(&self) -> bool {
+        match self {
+            WeatherError::Request(_) => true,
+            WeatherError::HttpStatus(status) => {
+                status.is_server_error() || *status == reqwest::StatusCode::TOO_MANY_REQUESTS
+            }
+            _ => false,
+        }
+    }
+}
 
 pub type Result<T> = std::result::Result<T, WeatherError>;
 
@@ -195,6 +213,9 @@ pub fn celsius_to_fahrenheit(c: f64) -> f64 {
     (c * 9.0 / 5.0) + 32.0
 }
 
+const RETRIES: u32 = 2;
+const RETRY_DELAY: Duration = Duration::from_secs(2);
+
 /// The API also accepts station lists and state selectors, and would then report another airport.
 fn validate_icao(icao: &str) -> Result<()> {
     if icao.len() == 4 && icao.chars().all(|c| c.is_ascii_alphanumeric()) {
@@ -217,23 +238,36 @@ pub fn fetch_weather_data(icao: &str) -> Result<MetarData> {
         .build()
         .map_err(|e| WeatherError::HttpClient(e.to_string()))?;
 
-    let response = client
-        .get(&url)
-        .send()
-        .map_err(|e| WeatherError::Request(e.to_string()))?;
-    let status = response.status();
-    let body = response
-        .text()
-        .map_err(|e| WeatherError::Request(e.to_string()))?;
+    with_retries(RETRY_DELAY, || {
+        let response = client
+            .get(&url)
+            .send()
+            .map_err(|e| WeatherError::Request(e.to_string()))?;
+        let status = response.status();
+        let body = response
+            .text()
+            .map_err(|e| WeatherError::Request(e.to_string()))?;
 
-    parse_metar_response(icao, status, &body)
+        parse_metar_response(icao, status, &body)
+    })
+}
+
+fn with_retries<T>(delay: Duration, mut attempt: impl FnMut() -> Result<T>) -> Result<T> {
+    for _ in 0..RETRIES {
+        match attempt() {
+            Err(e) if e.is_transient() => {
+                eprintln!("{e}; retrying in {} seconds", delay.as_secs());
+                std::thread::sleep(delay);
+            }
+            result => return result,
+        }
+    }
+    attempt()
 }
 
 fn parse_metar_response(icao: &str, status: reqwest::StatusCode, body: &str) -> Result<MetarData> {
     if !status.is_success() {
-        return Err(WeatherError::Request(format!(
-            "aviationweather.gov returned HTTP status {status}"
-        )));
+        return Err(WeatherError::HttpStatus(status));
     }
 
     if body.is_empty() {
@@ -384,11 +418,11 @@ mod tests {
 
         assert!(matches!(
             error(StatusCode::BAD_REQUEST, r#"{"status":"error"}"#),
-            WeatherError::Request(_)
+            WeatherError::HttpStatus(_)
         ));
         assert!(matches!(
             error(StatusCode::INTERNAL_SERVER_ERROR, "<html>"),
-            WeatherError::Request(_)
+            WeatherError::HttpStatus(_)
         ));
         assert!(matches!(
             error(StatusCode::NO_CONTENT, ""),
@@ -402,5 +436,64 @@ mod tests {
             error(StatusCode::OK, "<html>"),
             WeatherError::InvalidJson(_)
         ));
+    }
+
+    fn count_attempts(mut outcome: impl FnMut(u32) -> Result<()>) -> (u32, Result<()>) {
+        let mut attempts = 0;
+        let result = with_retries(Duration::ZERO, || {
+            attempts += 1;
+            outcome(attempts)
+        });
+        (attempts, result)
+    }
+
+    fn gateway_timeout() -> WeatherError {
+        WeatherError::HttpStatus(reqwest::StatusCode::GATEWAY_TIMEOUT)
+    }
+
+    #[test]
+    fn retries_until_a_transient_failure_clears() {
+        let (attempts, result) = count_attempts(|attempt| match attempt {
+            1 => Err(gateway_timeout()),
+            2 => Err(WeatherError::Request("connection reset".to_string())),
+            _ => Ok(()),
+        });
+
+        assert_eq!(attempts, 3);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn gives_up_after_two_retries() {
+        let (attempts, result) = count_attempts(|_| Err(gateway_timeout()));
+
+        assert_eq!(attempts, 3);
+        assert!(matches!(result, Err(WeatherError::HttpStatus(_))));
+    }
+
+    #[test]
+    fn stops_at_the_first_success() {
+        assert_eq!(count_attempts(|_| Ok(())).0, 1);
+    }
+
+    #[test]
+    fn does_not_retry_failures_that_would_repeat() {
+        let failures: [fn() -> WeatherError; 4] = [
+            || WeatherError::HttpStatus(reqwest::StatusCode::BAD_REQUEST),
+            || WeatherError::NoData("KSJC".to_string()),
+            || WeatherError::EmptyResponse("KSJC".to_string()),
+            || WeatherError::InvalidJson("<html>".to_string()),
+        ];
+
+        for failure in failures {
+            assert_eq!(count_attempts(|_| Err(failure())).0, 1);
+        }
+    }
+
+    #[test]
+    fn retries_when_rate_limited() {
+        let rate_limited = WeatherError::HttpStatus(reqwest::StatusCode::TOO_MANY_REQUESTS);
+
+        assert!(rate_limited.is_transient());
     }
 }
