@@ -3,8 +3,10 @@ use std::fmt;
 
 mod abbreviations;
 pub mod tts;
+mod weather_groups;
 
 pub use abbreviations::expand_abbreviations;
+pub use weather_groups::{WeatherGroup, parse_weather_groups};
 
 #[derive(Debug)]
 pub enum WeatherError {
@@ -128,6 +130,10 @@ impl WmoCode {
         }
     }
 
+    pub fn from_code(code: &str) -> Option<WmoCode> {
+        Self::all_codes().into_iter().find(|c| c.code() == code)
+    }
+
     fn all_codes() -> Vec<WmoCode> {
         vec![
             WmoCode::Rain,
@@ -178,21 +184,6 @@ pub struct MetarData {
 
 pub fn celsius_to_fahrenheit(c: f64) -> f64 {
     (c * 9.0 / 5.0) + 32.0
-}
-
-pub fn parse_wmo_codes(wx_string: &str) -> Vec<WmoCode> {
-    WmoCode::all_codes()
-        .into_iter()
-        .filter(|code| {
-            wx_string.split_whitespace().any(|group| {
-                group
-                    .trim_start_matches(['+', '-'])
-                    .as_bytes()
-                    .chunks(2)
-                    .any(|pair| pair == code.code().as_bytes())
-            })
-        })
-        .collect()
 }
 
 pub fn fetch_weather_data(icao: &str) -> Result<MetarData> {
@@ -246,66 +237,29 @@ pub fn display_weather(metar: &MetarData) {
 
     if let Some(ref wx) = metar.wx_string {
         println!("Weather String: {}", wx);
-        let codes = parse_wmo_codes(wx);
-        if !codes.is_empty() {
-            println!("WMO Codes Found:");
-            for code in codes {
-                println!("  - {}", code);
-            }
-        } else {
-            println!("WMO Codes Found: None");
-        }
     } else {
         println!("Weather: None reported");
+    }
+
+    let groups = metar
+        .wx_string
+        .as_deref()
+        .map(parse_weather_groups)
+        .unwrap_or_default();
+    if groups.is_empty() {
         println!("WMO Codes Found: None");
+    } else {
+        println!("WMO Codes Found:");
+        for group in groups {
+            let description = group.description.as_deref().unwrap_or("Not understood");
+            println!("  - {} ({})", group.raw, description);
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::WmoCode::*;
     use super::*;
-
-    #[test]
-    fn parses_wmo_codes() {
-        let cases = [
-            ("", vec![]),
-            ("RA", vec![Rain]),
-            ("-RA", vec![Rain]),
-            ("+RA", vec![Rain]),
-            ("+FC", vec![FunnelCloud]),
-            ("VCFG", vec![Fog]),
-            ("BCFG", vec![Fog]),
-            ("FZRA", vec![Rain]),
-            ("-RA BR", vec![Rain, Mist]),
-            ("RA RA", vec![Rain]),
-            ("-SHRASN", vec![Rain, Snow]),
-            ("+TSRA", vec![Rain, Thunderstorm]),
-            ("UP", vec![UnknownPrecipitation]),
-        ];
-
-        for (wx, expected) in cases {
-            assert_eq!(parse_wmo_codes(wx), expected, "wx string: {wx:?}");
-        }
-    }
-
-    #[test]
-    fn does_not_match_codes_across_group_boundaries() {
-        let cases = [
-            ("TSSN", vec![Snow, Thunderstorm]),
-            ("TSGR", vec![Hail, Thunderstorm]),
-            ("TSGS", vec![SmallHail, Thunderstorm]),
-        ];
-
-        for (wx, expected) in cases {
-            assert_eq!(parse_wmo_codes(wx), expected, "wx string: {wx:?}");
-        }
-    }
-
-    #[test]
-    fn unrecognized_codes_are_ignored() {
-        assert_eq!(parse_wmo_codes("XX"), vec![]);
-    }
 
     #[test]
     fn deserializes_full_metar_ignoring_unknown_fields() {

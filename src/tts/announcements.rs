@@ -1,4 +1,6 @@
-use crate::{MetarData, celsius_to_fahrenheit, expand_abbreviations, parse_wmo_codes};
+use crate::{
+    MetarData, WeatherGroup, celsius_to_fahrenheit, expand_abbreviations, parse_weather_groups,
+};
 
 #[derive(Debug, Clone, clap::ValueEnum)]
 pub enum AnnouncementFormat {
@@ -19,6 +21,13 @@ fn spell_out_icao(icao: &str) -> String {
         .join(" ")
 }
 
+fn spoken_group(group: &WeatherGroup) -> &str {
+    group
+        .description
+        .as_deref()
+        .unwrap_or("Unrecognized weather")
+}
+
 fn spoken_degrees(degrees: f64) -> String {
     let rounded = degrees.round() as i32;
     if rounded < 0 {
@@ -29,8 +38,11 @@ fn spoken_degrees(degrees: f64) -> String {
 }
 
 pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFormat) -> String {
-    // NSW ("no significant weather") reports an absence of weather, not an unrecognized code.
-    let wx_string = metar.wx_string.as_deref().filter(|wx| wx.trim() != "NSW");
+    let groups = metar
+        .wx_string
+        .as_deref()
+        .map(parse_weather_groups)
+        .unwrap_or_default();
 
     match format {
         AnnouncementFormat::Speech | AnnouncementFormat::Brief => {
@@ -48,19 +60,13 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                 ));
             }
 
-            if let Some(wx) = wx_string {
-                let codes = parse_wmo_codes(wx);
-                if !codes.is_empty() {
-                    announcement.push_str("Current conditions... ");
-                    let conditions: Vec<String> =
-                        codes.iter().map(|c| c.description().to_string()).collect();
-                    announcement.push_str(&conditions.join("... "));
-                    announcement.push_str("...");
-                } else {
-                    announcement.push_str("Conditions not recognized...");
-                }
-            } else {
+            if groups.is_empty() {
                 announcement.push_str("No significant weather reported...");
+            } else {
+                announcement.push_str("Current conditions... ");
+                let conditions: Vec<&str> = groups.iter().map(spoken_group).collect();
+                announcement.push_str(&conditions.join("... "));
+                announcement.push_str("...");
             }
 
             announcement
@@ -89,20 +95,15 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                 announcement.push_str("Temperature... not available... ");
             }
 
-            if let Some(wx) = wx_string {
+            if let Some(wx) = metar.wx_string.as_deref().filter(|_| !groups.is_empty()) {
                 announcement.push_str(&format!("Weather string... {}... ", wx));
-                let codes = parse_wmo_codes(wx);
-                if !codes.is_empty() {
-                    announcement.push_str("Weather codes found... ");
-                    let code_descriptions: Vec<String> = codes
-                        .iter()
-                        .map(|c| format!("{} ({})", c.description(), c.code()))
-                        .collect();
-                    announcement.push_str(&code_descriptions.join("... "));
-                    announcement.push_str("...");
-                } else {
-                    announcement.push_str("No weather codes found...");
-                }
+                announcement.push_str("Weather codes found... ");
+                let code_descriptions: Vec<String> = groups
+                    .iter()
+                    .map(|group| format!("{} ({})", spoken_group(group), group.raw))
+                    .collect();
+                announcement.push_str(&code_descriptions.join("... "));
+                announcement.push_str("...");
             } else {
                 announcement.push_str("Weather... none reported... No weather codes found...");
             }
@@ -121,17 +122,12 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                 ));
             }
 
-            if let Some(wx) = wx_string {
-                let codes = parse_wmo_codes(wx);
-                if !codes.is_empty() {
-                    for code in codes {
-                        announcement.push_str(&format!("{}... ", code.description()));
-                    }
-                } else {
-                    announcement.push_str("Conditions not recognized... ");
-                }
-            } else {
+            if groups.is_empty() {
                 announcement.push_str("No significant weather reported... ");
+            } else {
+                for group in &groups {
+                    announcement.push_str(&format!("{}... ", spoken_group(group)));
+                }
             }
 
             announcement.push_str("End weather...");
@@ -177,7 +173,7 @@ mod tests {
         let cases = [
             (
                 full_metar(),
-                "Weather for K S F O... San Francisco International, California... Temperature... 68 degrees fahrenheit... Current conditions... Rain... Mist...",
+                "Weather for K S F O... San Francisco International, California... Temperature... 68 degrees fahrenheit... Current conditions... Light rain... Mist...",
             ),
             (
                 bare_metar(),
@@ -185,7 +181,7 @@ mod tests {
             ),
             (
                 unrecognized_wx_metar(),
-                "Weather for K S F O... Conditions not recognized...",
+                "Weather for K S F O... Current conditions... Unrecognized weather...",
             ),
         ];
 
@@ -202,7 +198,7 @@ mod tests {
             (
                 full_metar(),
                 format!(
-                    "Detailed weather report for K S F O... San Francisco International, California... Raw METAR... {RAW_OB}... Temperature... 68 degrees fahrenheit... 20 degrees celsius... Weather string... -RA BR... Weather codes found... Rain (RA)... Mist (BR)..."
+                    "Detailed weather report for K S F O... San Francisco International, California... Raw METAR... {RAW_OB}... Temperature... 68 degrees fahrenheit... 20 degrees celsius... Weather string... -RA BR... Weather codes found... Light rain (-RA)... Mist (BR)..."
                 ),
             ),
             (
@@ -214,7 +210,7 @@ mod tests {
             (
                 unrecognized_wx_metar(),
                 format!(
-                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Temperature... not available... Weather string... XX... No weather codes found..."
+                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Temperature... not available... Weather string... XX... Weather codes found... Unrecognized weather (XX)..."
                 ),
             ),
         ];
@@ -232,7 +228,7 @@ mod tests {
         let cases = [
             (
                 full_metar(),
-                "K S F O weather... Temperature 68 degrees... Rain... Mist... End weather...",
+                "K S F O weather... Temperature 68 degrees... Light rain... Mist... End weather...",
             ),
             (
                 bare_metar(),
@@ -240,7 +236,7 @@ mod tests {
             ),
             (
                 unrecognized_wx_metar(),
-                "K S F O weather... Conditions not recognized... End weather...",
+                "K S F O weather... Unrecognized weather... End weather...",
             ),
         ];
 
@@ -261,11 +257,11 @@ mod tests {
 
         assert_eq!(
             generate_weather_announcement(&metar, &AnnouncementFormat::Speech),
-            "Weather for K S F O... Current conditions... Unknown Precipitation..."
+            "Weather for K S F O... Current conditions... Unknown precipitation..."
         );
         assert_eq!(
             generate_weather_announcement(&metar, &AnnouncementFormat::Aviation),
-            "K S F O weather... Unknown Precipitation... End weather..."
+            "K S F O weather... Unknown precipitation... End weather..."
         );
     }
 
@@ -287,6 +283,19 @@ mod tests {
                 generate_weather_announcement(&bare_metar(), &format)
             );
         }
+    }
+
+    #[test]
+    fn hazard_qualifiers_are_spoken_in_report_order() {
+        let metar = MetarData {
+            wx_string: Some("VCTS -FZRA".to_string()),
+            ..bare_metar()
+        };
+
+        assert_eq!(
+            generate_weather_announcement(&metar, &AnnouncementFormat::Aviation),
+            "K S F O weather... Thunderstorm in the vicinity... Light freezing rain... End weather..."
+        );
     }
 
     #[test]
