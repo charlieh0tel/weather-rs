@@ -32,12 +32,28 @@ fn push_expanded(result: &mut String, word: &str) {
     }
 
     let stem = word.trim_end_matches('.');
+    let trailing_periods = &word[stem.len()..];
+
     if let Some(expansion) = abbrev_map.get(stem) {
         result.push_str(expansion);
-        result.push_str(&word[stem.len()..]);
-    } else {
-        result.push_str(word);
+        result.push_str(trailing_periods);
+        return;
     }
+
+    // Requiring two or more letters after the period leaves initials like "N.Y." alone.
+    if let Some((prefix, rest)) = stem.split_once('.')
+        && rest.chars().count() >= 2
+        && !rest.contains('.')
+        && let Some(expansion) = abbrev_map.get(&stem[..=prefix.len()])
+    {
+        result.push_str(expansion);
+        result.push(' ');
+        result.push_str(rest);
+        result.push_str(trailing_periods);
+        return;
+    }
+
+    result.push_str(word);
 }
 
 pub fn expand_abbreviations(text: &str) -> String {
@@ -79,6 +95,9 @@ mod tests {
             ("Intl.", "International."),
             ("Near San Jose, CA.", "Near San Jose, California."),
             ("Arpt...", "Airport..."),
+            ("Mt.Hood", "Mount Hood"),
+            ("St.Louis, MO", "Saint Louis, Missouri"),
+            ("Ft.Worth.", "Fort Worth."),
         ];
 
         for (input, expected) in cases {
@@ -94,7 +113,10 @@ mod tests {
             "St",
             "U.S.",
             "...",
-            "Mt.Hood",
+            "Xx.Hood",
+            "N.Y.",
+            "N.Y",
+            "S.F.O",
             "Runway 12",
         ];
 
