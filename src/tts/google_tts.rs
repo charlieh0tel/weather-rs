@@ -2,6 +2,8 @@ use crate::tts::{AudioFormat, TtsBackend, TtsError, Voice};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
+const SYNTHESIZE_URL: &str = "https://texttospeech.googleapis.com/v1/text:synthesize";
+
 #[derive(Debug, Clone)]
 pub enum GoogleVoice {
     /// Default neural voice (US English Female)
@@ -52,6 +54,18 @@ pub struct GoogleTts {
 impl GoogleTts {
     pub fn new(api_key: String, voice: GoogleVoice) -> Self {
         Self { api_key, voice }
+    }
+
+    /// The key goes in a header because reqwest includes the URL in its error messages.
+    fn request_builder(
+        &self,
+        client: &reqwest::blocking::Client,
+        request: &TtsRequest,
+    ) -> reqwest::blocking::RequestBuilder {
+        client
+            .post(SYNTHESIZE_URL)
+            .header("x-goog-api-key", &self.api_key)
+            .json(request)
     }
 
     fn audio_format_to_google_encoding(&self, format: &AudioFormat) -> Result<&str, TtsError> {
@@ -131,15 +145,8 @@ impl TtsBackend for GoogleTts {
             },
         };
 
-        let client = reqwest::blocking::Client::new();
-        let url = format!(
-            "https://texttospeech.googleapis.com/v1/text:synthesize?key={}",
-            self.api_key
-        );
-
-        let response = client
-            .post(&url)
-            .json(&request)
+        let response = self
+            .request_builder(&reqwest::blocking::Client::new(), &request)
             .send()
             .map_err(|e| TtsError::SynthesisError(format!("HTTP request failed: {}", e)))?;
 
@@ -177,5 +184,37 @@ impl TtsBackend for GoogleTts {
 
     fn backend_name(&self) -> &str {
         "Google Cloud TTS"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_key_is_sent_in_a_header_and_not_the_url() {
+        const KEY: &str = "not-a-real-key";
+        let tts = GoogleTts::new(KEY.to_string(), GoogleVoice::Default);
+        let request = TtsRequest {
+            input: TtsInput {
+                text: "text".to_string(),
+            },
+            voice: TtsVoice {
+                language_code: "en-US".to_string(),
+                name: "name".to_string(),
+            },
+            audio_config: AudioConfig {
+                audio_encoding: "MP3".to_string(),
+                sample_rate_hertz: 22050,
+            },
+        };
+
+        let built = tts
+            .request_builder(&reqwest::blocking::Client::new(), &request)
+            .build()
+            .unwrap();
+
+        assert!(!built.url().as_str().contains(KEY));
+        assert_eq!(built.headers()["x-goog-api-key"], KEY);
     }
 }
