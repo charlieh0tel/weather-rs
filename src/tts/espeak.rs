@@ -147,7 +147,7 @@ impl TtsBackend for EspeakTts {
             // Synthesize text
             let result = espeak_Synth(
                 c_text.as_ptr() as *const std::os::raw::c_void,
-                text.len(),
+                c_text.as_bytes_with_nul().len(),
                 0,
                 0, // POS_CHARACTER
                 0,
@@ -256,7 +256,7 @@ impl TtsBackend for EspeakTts {
             // Synthesize and speak
             let result = espeak_Synth(
                 c_text.as_ptr() as *const std::os::raw::c_void,
-                text.len(),
+                c_text.as_bytes_with_nul().len(),
                 0,
                 0, // POS_CHARACTER
                 0,
@@ -282,5 +282,45 @@ impl TtsBackend for EspeakTts {
 
     fn backend_name(&self) -> &str {
         "eSpeak-NG"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEXT: &str = "Weather for K S F O... Temperature... 68 degrees fahrenheit...";
+
+    fn synthesize_samples(tts: &EspeakTts, text: &str) -> Vec<i16> {
+        let wav = tts.synthesize(text, &AudioFormat::Wav).unwrap();
+        hound::WavReader::new(wav.as_slice())
+            .unwrap()
+            .samples::<i16>()
+            .map(|sample| sample.unwrap())
+            .collect()
+    }
+
+    fn default_tts() -> EspeakTts {
+        EspeakTts::new(EspeakVoice::default()).unwrap()
+    }
+
+    #[test]
+    fn speaks_only_the_given_text_whatever_is_on_the_heap() {
+        let tts = default_tts();
+        let expected = synthesize_samples(&tts, TEXT).len();
+        // Repeated runs naturally vary by a few hundred samples; speaking extra text adds far more.
+        let tolerance = expected / 100;
+
+        for _ in 0..10 {
+            // Leaves non-zero freed chunks of the size eSpeak allocates for its copy of the text.
+            let garbage: Vec<Vec<u8>> = (0..64).map(|_| vec![b'x'; TEXT.len()]).collect();
+            drop(garbage);
+
+            let actual = synthesize_samples(&tts, TEXT).len();
+            assert!(
+                actual.abs_diff(expected) <= tolerance,
+                "expected about {expected} samples, got {actual}"
+            );
+        }
     }
 }
