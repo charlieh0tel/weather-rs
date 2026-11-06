@@ -45,9 +45,9 @@ struct EspeakArgs {
     #[command(flatten)]
     common: CommonArgs,
 
-    /// Audio format for output
-    #[arg(short = 'a', long, value_enum, default_value = "wav")]
-    audio_format: AudioFormat,
+    /// Audio format for the output file [default: from its extension, else wav]
+    #[arg(short = 'a', long, value_enum, requires = "output")]
+    audio_format: Option<AudioFormat>,
 
     /// Voice to use for speech
     #[arg(short, long, value_enum, default_value = "default")]
@@ -71,9 +71,9 @@ struct GoogleArgs {
     #[command(flatten)]
     common: CommonArgs,
 
-    /// Audio format for output
-    #[arg(short = 'a', long, value_enum, default_value = "mp3")]
-    audio_format: AudioFormat,
+    /// Audio format for the output file [default: from its extension, else mp3]
+    #[arg(short = 'a', long, value_enum, requires = "output")]
+    audio_format: Option<AudioFormat>,
 
     /// Voice to use for speech
     #[arg(short, long, value_enum, default_value = "default")]
@@ -113,7 +113,12 @@ fn handle_espeak(args: EspeakArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let voice = create_espeak_voice(args.voice, args.speed, args.pitch, args.gap);
     let tts = EspeakTts::new(voice)?;
-    execute_tts_output(&tts, &announcement, args.common.output, &args.audio_format)?;
+    let audio_format = AudioFormat::resolve(
+        args.audio_format,
+        args.common.output.as_deref(),
+        AudioFormat::Wav,
+    )?;
+    execute_tts_output(&tts, &announcement, args.common.output, &audio_format)?;
 
     Ok(())
 }
@@ -133,7 +138,12 @@ fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|_| "GOOGLE_CLOUD_API_KEY environment variable not set. Please set your Google Cloud TTS API key: export GOOGLE_CLOUD_API_KEY=your_api_key_here")?;
 
     let tts = GoogleTts::new(api_key, args.voice.into());
-    execute_tts_output(&tts, &announcement, args.common.output, &args.audio_format)?;
+    let audio_format = AudioFormat::resolve(
+        args.audio_format,
+        args.common.output.as_deref(),
+        AudioFormat::Mp3,
+    )?;
+    execute_tts_output(&tts, &announcement, args.common.output, &audio_format)?;
 
     Ok(())
 }
@@ -211,5 +221,12 @@ mod tests {
             (200, 70, 5)
         );
         assert_eq!(overridden.name, EspeakVoice::us_male().name);
+    }
+
+    #[test]
+    fn audio_format_requires_an_output_file() {
+        for engine in ["espeak", "google"] {
+            assert!(Cli::try_parse_from(["speak-weather", engine, "-a", "wav", "KSJC"]).is_err());
+        }
     }
 }

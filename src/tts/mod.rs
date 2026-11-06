@@ -1,3 +1,4 @@
+use clap::ValueEnum;
 use std::error::Error;
 use std::fmt;
 
@@ -60,9 +61,38 @@ impl AudioFormat {
             AudioFormat::Mp3 => "mp3",
             AudioFormat::Wav => "wav",
             AudioFormat::Ogg => "ogg",
-            AudioFormat::Ulaw => "wav",
-            AudioFormat::Alaw => "wav",
+            AudioFormat::Ulaw => "ulaw",
+            AudioFormat::Alaw => "alaw",
             AudioFormat::Gsm => "gsm",
+        }
+    }
+
+    fn from_path(path: &str) -> Option<&'static AudioFormat> {
+        let extension = std::path::Path::new(path).extension()?.to_str()?;
+        Self::value_variants()
+            .iter()
+            .find(|format| format.file_extension().eq_ignore_ascii_case(extension))
+    }
+
+    /// Chooses the format to write: an explicit choice, else the output file's extension, else
+    /// the default.  A file named for a different format than it holds is an error.
+    pub fn resolve(
+        explicit: Option<AudioFormat>,
+        output_path: Option<&str>,
+        default: AudioFormat,
+    ) -> Result<AudioFormat, TtsError> {
+        let from_path = output_path.and_then(Self::from_path);
+        match (explicit, from_path) {
+            (Some(explicit), Some(from_path))
+                if std::mem::discriminant(&explicit) != std::mem::discriminant(from_path) =>
+            {
+                Err(TtsError::FileError(format!(
+                    "Output file is named for {from_path} but the audio format is {explicit}"
+                )))
+            }
+            (Some(explicit), _) => Ok(explicit),
+            (None, Some(from_path)) => Ok(from_path.clone()),
+            (None, None) => Ok(default),
         }
     }
 
@@ -258,6 +288,35 @@ mod tests {
 
     fn output_path_in(dir: &tempfile::TempDir) -> String {
         dir.path().join("out.wav").to_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn resolves_the_audio_format() {
+        use AudioFormat::*;
+
+        let cases = [
+            (None, None, "MP3"),
+            (None, Some("out.ulaw"), "ULAW"),
+            (None, Some("out.WAV"), "WAV"),
+            (None, Some("out.unknown"), "MP3"),
+            (None, Some("no_extension"), "MP3"),
+            (Some(Gsm), None, "GSM"),
+            (Some(Gsm), Some("out.gsm"), "GSM"),
+            (Some(Gsm), Some("out.unknown"), "GSM"),
+        ];
+
+        for (explicit, path, expected) in cases {
+            let resolved = AudioFormat::resolve(explicit, path, Mp3).unwrap();
+            assert_eq!(resolved.to_string(), expected, "path: {path:?}");
+        }
+    }
+
+    #[test]
+    fn rejects_an_output_file_named_for_another_format() {
+        assert!(matches!(
+            AudioFormat::resolve(Some(AudioFormat::Wav), Some("out.ulaw"), AudioFormat::Mp3),
+            Err(TtsError::FileError(_))
+        ));
     }
 
     #[test]
