@@ -2,7 +2,6 @@
 
 set -o errexit
 set -o nounset
-set -o xtrace
 
 NODE=65314
 ICAO="KSJC"
@@ -12,7 +11,10 @@ ENGINE_ARGS=("-v" "uk-female")
 FORMAT="ulaw"
 STYLE="brief"
 
-. ~/google_cloud_tts_api.shfrag
+if [[ "${ENGINE}" == "google" ]]; then
+  # shellcheck source=/dev/null
+  . ~/google_cloud_tts_api.shfrag
+fi
 
 FILE="$(mktemp "/tmp/tmpXXXXXXXXXX.${FORMAT}")"
 trap '/bin/rm -f "${FILE}"' EXIT SIGINT SIGTERM
