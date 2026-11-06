@@ -16,6 +16,10 @@ pub enum Voice {
     UsFemale,
     /// US English male voice
     UsMale,
+    /// UK English female voice
+    UkFemale,
+    /// UK English male voice
+    UkMale,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]

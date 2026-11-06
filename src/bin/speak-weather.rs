@@ -164,3 +164,32 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn cli_definition_is_valid() {
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn accepts_the_flags_used_by_the_w6otx_script() {
+        Cli::try_parse_from([
+            "speak-weather",
+            "espeak",
+            "-v",
+            "uk-female",
+            "-f",
+            "brief",
+            "-a",
+            "ulaw",
+            "-o",
+            "out.ulaw",
+            "KSJC",
+        ])
+        .unwrap();
+    }
+}

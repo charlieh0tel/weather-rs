@@ -50,6 +50,20 @@ impl EspeakVoice {
             gap: 15,
         }
     }
+
+    pub fn uk_female() -> Self {
+        Self {
+            name: "en-gb+f3".to_string(),
+            ..Self::us_female()
+        }
+    }
+
+    pub fn uk_male() -> Self {
+        Self {
+            name: "en-gb+m3".to_string(),
+            ..Self::us_male()
+        }
+    }
 }
 
 impl From<Voice> for EspeakVoice {
@@ -58,6 +72,8 @@ impl From<Voice> for EspeakVoice {
             Voice::Default => EspeakVoice::default(),
             Voice::UsFemale => EspeakVoice::us_female(),
             Voice::UsMale => EspeakVoice::us_male(),
+            Voice::UkFemale => EspeakVoice::uk_female(),
+            Voice::UkMale => EspeakVoice::uk_male(),
         }
     }
 }
