@@ -42,14 +42,15 @@ pub type Result<T> = std::result::Result<T, WeatherError>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WmoCode {
     // Precipitation
-    Rain,        // RA
-    Snow,        // SN
-    Drizzle,     // DZ
-    SnowGrains,  // SG
-    IceCrystals, // IC
-    IcePellets,  // PL
-    Hail,        // GR
-    SmallHail,   // GS
+    Rain,                 // RA
+    Snow,                 // SN
+    Drizzle,              // DZ
+    SnowGrains,           // SG
+    IceCrystals,          // IC
+    IcePellets,           // PL
+    Hail,                 // GR
+    SmallHail,            // GS
+    UnknownPrecipitation, // UP
 
     // Obscuration
     Fog,         // FG
@@ -81,6 +82,7 @@ impl WmoCode {
             WmoCode::IcePellets => "PL",
             WmoCode::Hail => "GR",
             WmoCode::SmallHail => "GS",
+            WmoCode::UnknownPrecipitation => "UP",
             WmoCode::Fog => "FG",
             WmoCode::Mist => "BR",
             WmoCode::Haze => "HZ",
@@ -108,6 +110,7 @@ impl WmoCode {
             WmoCode::IcePellets => "Ice Pellets",
             WmoCode::Hail => "Hail",
             WmoCode::SmallHail => "Small Hail/Snow Pellets",
+            WmoCode::UnknownPrecipitation => "Unknown Precipitation",
             WmoCode::Fog => "Fog",
             WmoCode::Mist => "Mist",
             WmoCode::Haze => "Haze",
@@ -135,6 +138,7 @@ impl WmoCode {
             WmoCode::IcePellets,
             WmoCode::Hail,
             WmoCode::SmallHail,
+            WmoCode::UnknownPrecipitation,
             WmoCode::Fog,
             WmoCode::Mist,
             WmoCode::Haze,
@@ -277,6 +281,7 @@ mod tests {
             ("RA RA", vec![Rain]),
             ("-SHRASN", vec![Rain, Snow]),
             ("+TSRA", vec![Rain, Thunderstorm]),
+            ("UP", vec![UnknownPrecipitation]),
         ];
 
         for (wx, expected) in cases {
@@ -299,7 +304,7 @@ mod tests {
 
     #[test]
     fn unrecognized_codes_are_ignored() {
-        assert_eq!(parse_wmo_codes("UP"), vec![]);
+        assert_eq!(parse_wmo_codes("XX"), vec![]);
     }
 
     #[test]

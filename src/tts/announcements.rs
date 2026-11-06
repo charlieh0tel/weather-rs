@@ -45,7 +45,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                     announcement.push_str(&conditions.join("... "));
                     announcement.push_str("...");
                 } else {
-                    announcement.push_str("Clear conditions...");
+                    announcement.push_str("Conditions not recognized...");
                 }
             } else {
                 announcement.push_str("Clear conditions...");
@@ -117,7 +117,7 @@ pub fn generate_weather_announcement(metar: &MetarData, format: &AnnouncementFor
                         announcement.push_str(&format!("{}... ", code.description()));
                     }
                 } else {
-                    announcement.push_str("Clear... ");
+                    announcement.push_str("Conditions not recognized... ");
                 }
             } else {
                 announcement.push_str("Clear... ");
@@ -156,7 +156,7 @@ mod tests {
 
     fn unrecognized_wx_metar() -> MetarData {
         MetarData {
-            wx_string: Some("UP".to_string()),
+            wx_string: Some("XX".to_string()),
             ..bare_metar()
         }
     }
@@ -171,7 +171,7 @@ mod tests {
             (bare_metar(), "Weather for K S F O... Clear conditions..."),
             (
                 unrecognized_wx_metar(),
-                "Weather for K S F O... Clear conditions...",
+                "Weather for K S F O... Conditions not recognized...",
             ),
         ];
 
@@ -200,7 +200,7 @@ mod tests {
             (
                 unrecognized_wx_metar(),
                 format!(
-                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Temperature... not available... Weather string... UP... No weather codes found..."
+                    "Detailed weather report for K S F O... Raw METAR... {RAW_OB}... Temperature... not available... Weather string... XX... No weather codes found..."
                 ),
             ),
         ];
@@ -223,7 +223,7 @@ mod tests {
             (bare_metar(), "K S F O weather... Clear... End weather..."),
             (
                 unrecognized_wx_metar(),
-                "K S F O weather... Clear... End weather...",
+                "K S F O weather... Conditions not recognized... End weather...",
             ),
         ];
 
@@ -233,6 +233,23 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn unknown_precipitation_is_announced() {
+        let metar = MetarData {
+            wx_string: Some("UP".to_string()),
+            ..bare_metar()
+        };
+
+        assert_eq!(
+            generate_weather_announcement(&metar, &AnnouncementFormat::Speech),
+            "Weather for K S F O... Current conditions... Unknown Precipitation..."
+        );
+        assert_eq!(
+            generate_weather_announcement(&metar, &AnnouncementFormat::Aviation),
+            "K S F O weather... Unknown Precipitation... End weather..."
+        );
     }
 
     #[test]
