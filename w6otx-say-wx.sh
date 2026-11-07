@@ -7,9 +7,9 @@ set -o nounset
 
 readonly NODE=65314
 readonly ICAO="KSJC"
-#readonly ENGINE="google"
-readonly ENGINE="espeak"
-readonly -a ENGINE_ARGS=("-v" "uk-female")
+readonly ENGINE="google"
+#readonly ENGINE="espeak"
+readonly -a ENGINE_ARGS=("--voice-name" "en-US-Chirp3-HD-Leda")
 readonly FORMAT="ulaw"
 readonly STYLE="brief"
 # How long a busy node gets to open the file before it is deleted.

@@ -50,12 +50,31 @@ impl From<Voice> for GoogleVoice {
 
 pub struct GoogleTts {
     api_key: String,
-    voice: GoogleVoice,
+    voice_name: String,
+    language_code: String,
 }
 
 impl GoogleTts {
     pub fn new(api_key: String, voice: GoogleVoice) -> Self {
-        Self { api_key, voice }
+        Self {
+            api_key,
+            voice_name: voice.google_voice_name().to_string(),
+            language_code: voice.language_code().to_string(),
+        }
+    }
+
+    /// Uses any Google voice by its full name, such as `en-US-Chirp3-HD-Leda`.
+    pub fn with_voice_name(api_key: String, voice_name: &str) -> Result<Self, TtsError> {
+        let language_code = language_code_of(voice_name).ok_or_else(|| {
+            TtsError::SynthesisError(format!(
+                "'{voice_name}' is not a Google voice name, which looks like en-US-Chirp3-HD-Leda"
+            ))
+        })?;
+        Ok(Self {
+            api_key,
+            voice_name: voice_name.to_string(),
+            language_code: language_code.to_string(),
+        })
     }
 
     /// The key goes in a header because reqwest includes the URL in its error messages.
@@ -83,6 +102,16 @@ impl GoogleTts {
             )),
         }
     }
+}
+
+/// The language code is the first two parts of a voice name: "en-US" in "en-US-Neural2-F".
+fn language_code_of(voice_name: &str) -> Option<&str> {
+    let mut parts = voice_name.splitn(3, '-');
+    let (language, region, variant) = (parts.next()?, parts.next()?, parts.next()?);
+    if language.is_empty() || region.is_empty() || variant.is_empty() {
+        return None;
+    }
+    Some(&voice_name[..language.len() + 1 + region.len()])
 }
 
 #[derive(Serialize)]
@@ -138,8 +167,8 @@ impl TtsBackend for GoogleTts {
                 text: text.to_string(),
             },
             voice: TtsVoice {
-                language_code: self.voice.language_code().to_string(),
-                name: self.voice.google_voice_name().to_string(),
+                language_code: self.language_code.clone(),
+                name: self.voice_name.clone(),
             },
             audio_config: AudioConfig {
                 audio_encoding: encoding.to_string(),
@@ -218,5 +247,30 @@ mod tests {
 
         assert!(!built.url().as_str().contains(KEY));
         assert_eq!(built.headers()["x-goog-api-key"], KEY);
+    }
+
+    #[test]
+    fn voice_names_give_their_language_code() {
+        let cases = [
+            ("en-US-Chirp3-HD-Leda", Some("en-US")),
+            ("en-GB-Neural2-A", Some("en-GB")),
+            ("cmn-CN-Wavenet-A", Some("cmn-CN")),
+            ("Leda", None),
+            ("en-US", None),
+            ("en-US-", None),
+            ("-US-Leda", None),
+            ("", None),
+        ];
+        for (name, expected) in cases {
+            assert_eq!(language_code_of(name), expected, "name: {name:?}");
+        }
+    }
+
+    #[test]
+    fn a_named_voice_is_used_in_the_request() {
+        let tts = GoogleTts::with_voice_name("key".to_string(), "en-US-Chirp3-HD-Leda").unwrap();
+        assert_eq!(tts.voice_name, "en-US-Chirp3-HD-Leda");
+        assert_eq!(tts.language_code, "en-US");
+        assert!(GoogleTts::with_voice_name("key".to_string(), "Leda").is_err());
     }
 }

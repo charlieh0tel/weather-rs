@@ -82,6 +82,10 @@ struct GoogleArgs {
     /// Voice to use for speech
     #[arg(short, long, value_enum, default_value = "default")]
     voice: Voice,
+
+    /// Any Google voice by its full name, such as en-US-Chirp3-HD-Leda (overrides --voice)
+    #[arg(long, conflicts_with = "voice")]
+    voice_name: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -143,7 +147,10 @@ fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
     let api_key = std::env::var("GOOGLE_CLOUD_API_KEY")
         .map_err(|_| "GOOGLE_CLOUD_API_KEY environment variable not set. Please set your Google Cloud TTS API key: export GOOGLE_CLOUD_API_KEY=your_api_key_here")?;
 
-    let tts = GoogleTts::new(api_key, args.voice.into());
+    let tts = match args.voice_name {
+        Some(name) => GoogleTts::with_voice_name(api_key, &name)?,
+        None => GoogleTts::new(api_key, args.voice.into()),
+    };
     let audio_format = AudioFormat::resolve(
         args.audio_format,
         args.common.output.as_deref(),
@@ -203,9 +210,9 @@ mod tests {
     fn accepts_the_flags_used_by_the_w6otx_script() {
         Cli::try_parse_from([
             "speak-weather",
-            "espeak",
-            "-v",
-            "uk-female",
+            "google",
+            "--voice-name",
+            "en-US-Chirp3-HD-Leda",
             "-f",
             "brief",
             "-a",
