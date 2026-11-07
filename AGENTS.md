@@ -16,4 +16,5 @@
   (https://google.github.io/styleguide/shellguide.html).
 - `shellcheck` must pass on all shell scripts before commits.  Ask first
   before adding any waiver (e.g. a `# shellcheck disable=` directive).
-- source ~/google_cloud_tts_api.shfrag to get the api key for google-tts
+- speak-weather reads the Google TTS API key from
+  ~/.config/speak-weather/google-api-key (or GOOGLE_CLOUD_API_KEY).

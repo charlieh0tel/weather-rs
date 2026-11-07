@@ -28,11 +28,6 @@ main() {
   trap 'exit 130' INT
   trap 'exit 143' TERM
 
-  if [[ "${ENGINE}" == "google" ]]; then
-    # shellcheck source=/dev/null
-    source ~/google_cloud_tts_api.shfrag
-  fi
-
   audio_file="$(mktemp "/tmp/tmpXXXXXXXXXX.${FORMAT}")"
 
   speak-weather "${ENGINE}" "${ENGINE_ARGS[@]}" -f "${STYLE}" -a "${FORMAT}" \
