@@ -88,19 +88,18 @@ impl GoogleTts {
             .header("x-goog-api-key", &self.api_key)
             .json(request)
     }
+}
 
-    fn audio_format_to_google_encoding(&self, format: &AudioFormat) -> Result<&str, TtsError> {
-        match format {
-            AudioFormat::Mp3 => Ok("MP3"),
-            AudioFormat::Wav | AudioFormat::Sln16 => Ok("LINEAR16"),
-            AudioFormat::Ogg => Ok("OGG_OPUS"),
-            AudioFormat::Ulaw => Ok("MULAW"),
-            AudioFormat::Alaw => Ok("ALAW"),
-            AudioFormat::Gsm => Err(TtsError::AudioConversionError(
-                "GSM format not directly supported by Google TTS. Use WAV and convert to GSM."
-                    .to_string(),
-            )),
-        }
+/// Raw formats are made from a WAV, which is what Google returns for LINEAR16.
+fn google_encoding(format: &AudioFormat) -> &'static str {
+    match format {
+        AudioFormat::Mp3 => "MP3",
+        AudioFormat::Ogg => "OGG_OPUS",
+        AudioFormat::Wav
+        | AudioFormat::Ulaw
+        | AudioFormat::Alaw
+        | AudioFormat::Gsm
+        | AudioFormat::Sln16 => "LINEAR16",
     }
 }
 
@@ -150,18 +149,7 @@ struct TtsResponse {
 
 impl TtsBackend for GoogleTts {
     fn synthesize(&self, text: &str, format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
-        // For telephony formats, always use WAV and convert to raw
-        let (google_format, needs_conversion) = if format.is_telephony_format() {
-            (&AudioFormat::Wav, true)
-        } else {
-            (format, false)
-        };
-
-        let encoding = self.audio_format_to_google_encoding(google_format)?;
-
         // Google resamples, so a WAV to be converted already has the target format's rate.
-        let sample_rate = format.telephony_sample_rate();
-
         let request = TtsRequest {
             input: TtsInput {
                 text: text.to_string(),
@@ -171,8 +159,8 @@ impl TtsBackend for GoogleTts {
                 name: self.voice_name.clone(),
             },
             audio_config: AudioConfig {
-                audio_encoding: encoding.to_string(),
-                sample_rate_hertz: sample_rate,
+                audio_encoding: google_encoding(format).to_string(),
+                sample_rate_hertz: format.sample_rate(),
             },
         };
 
@@ -199,9 +187,8 @@ impl TtsBackend for GoogleTts {
             .decode(&tts_response.audio_content)
             .map_err(|e| TtsError::SynthesisError(format!("Failed to decode audio: {}", e)))?;
 
-        // Convert format if needed using centralized conversion
-        if needs_conversion {
-            crate::tts::TtsPlayer::convert_audio_format(&audio_data, google_format, format)
+        if format.is_raw() {
+            crate::tts::TtsPlayer::convert_audio_format(&audio_data, &AudioFormat::Wav, format)
         } else {
             Ok(audio_data)
         }

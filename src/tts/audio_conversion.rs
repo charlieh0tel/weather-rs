@@ -1,129 +1,91 @@
-use crate::tts::TtsError;
+//! Conversion from WAV to the headerless formats Asterisk plays.
 
-/// Audio format conversion utilities
-///
-/// This module provides functions to convert between different audio formats,
-/// primarily for telephony applications that require specific formats like GSM.
+use crate::tts::{AudioFormat, TtsError};
+use std::io::Write;
 use std::process::Command;
 
-/// Convert WAV audio data to GSM format using sox
-pub fn convert_wav_to_gsm(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
-    convert_wav_to_telephony_format(wav_data, "gsm", "GSM")
+/// Converts WAV audio to a raw format.  A WAV already holding `.sln16`'s samples, as Google
+/// returns, only loses its header; everything else goes through sox.
+pub fn wav_to_raw(wav_data: &[u8], format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
+    let sox_type: &[&str] = match format {
+        AudioFormat::Ulaw => &["-t", "ul"],
+        AudioFormat::Alaw => &["-t", "al"],
+        AudioFormat::Gsm => &["-t", "gsm"],
+        AudioFormat::Sln16 => {
+            if let Some(samples) = sln16_samples(wav_data)? {
+                return Ok(samples);
+            }
+            &["-t", "raw", "-e", "signed-integer", "-b", "16", "-L"]
+        }
+        _ => {
+            return Err(TtsError::AudioConversionError(format!(
+                "{format} is not a raw format"
+            )));
+        }
+    };
+    sox(wav_data, sox_type, format)
 }
 
-/// Convert WAV audio data to telephony format using sox
-fn convert_wav_to_telephony_format(
-    wav_data: &[u8],
-    sox_format: &str,
-    format_name: &str,
-) -> Result<Vec<u8>, TtsError> {
-    sox_convert(wav_data, &["-t", sox_format], 8000, format_name)
-}
+/// The samples of a WAV that is already 16-bit mono at `.sln16`'s rate, else `None`.
+fn sln16_samples(wav_data: &[u8]) -> Result<Option<Vec<u8>>, TtsError> {
+    let read_error = |e| TtsError::AudioConversionError(format!("Failed to read WAV: {e}"));
 
-fn sox_convert(
-    wav_data: &[u8],
-    output_type: &[&str],
-    sample_rate: u32,
-    format_name: &str,
-) -> Result<Vec<u8>, TtsError> {
-    let mut temp_file = tempfile::Builder::new()
-        .suffix(".wav")
-        .tempfile()
-        .map_err(|e| {
-            TtsError::AudioConversionError(format!("Failed to create temp file: {}", e))
-        })?;
-
-    use std::io::Write;
-    temp_file
-        .write_all(wav_data)
-        .map_err(|e| TtsError::AudioConversionError(format!("Failed to write temp WAV: {}", e)))?;
-
-    let temp_path = temp_file.path();
-
-    let sample_rate = sample_rate.to_string();
-    let mut sox_args = vec![temp_path.to_str().unwrap()];
-    sox_args.extend_from_slice(output_type);
-    sox_args.extend_from_slice(&["-r", &sample_rate, "-c", "1", "-"]);
-    eprintln!("Running: sox {}", sox_args.join(" "));
-
-    let output = Command::new("sox").args(sox_args).output().map_err(|e| {
-        TtsError::AudioConversionError(format!(
-            "Failed to spawn sox for {} conversion: {}",
-            format_name, e
-        ))
-    })?;
-
-    if !output.status.success() {
-        return Err(TtsError::AudioConversionError(format!(
-            "Sox {} conversion failed: {}",
-            format_name,
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    Ok(output.stdout)
-}
-
-/// Convert WAV audio data to µ-law format
-pub fn convert_wav_to_ulaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
-    convert_wav_to_telephony_format(wav_data, "ul", "µ-law")
-}
-
-/// Convert WAV audio data to A-law format
-pub fn convert_wav_to_alaw(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
-    convert_wav_to_telephony_format(wav_data, "al", "A-law")
-}
-
-/// Asterisk's `.sln16` is the samples alone: 16-bit little-endian, mono, 16 kHz.  A WAV already
-/// in that form, as Google returns, only loses its header; anything else is resampled by sox.
-fn convert_wav_to_sln16(wav_data: &[u8]) -> Result<Vec<u8>, TtsError> {
-    let reader = hound::WavReader::new(wav_data)
-        .map_err(|e| TtsError::AudioConversionError(format!("Failed to read WAV: {e}")))?;
+    let reader = hound::WavReader::new(wav_data).map_err(read_error)?;
     let spec = reader.spec();
-    if spec.sample_rate != 16000
+    if spec.sample_rate != AudioFormat::Sln16.sample_rate()
         || spec.channels != 1
         || spec.bits_per_sample != 16
         || spec.sample_format != hound::SampleFormat::Int
     {
-        return sox_convert(
-            wav_data,
-            &["-t", "raw", "-e", "signed-integer", "-b", "16", "-L"],
-            16000,
-            "SLN16",
-        );
+        return Ok(None);
     }
 
     let samples = reader
         .into_samples::<i16>()
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| TtsError::AudioConversionError(format!("Failed to read WAV: {e}")))?;
-    Ok(samples.into_iter().flat_map(i16::to_le_bytes).collect())
+        .map_err(read_error)?;
+    Ok(Some(
+        samples.into_iter().flat_map(i16::to_le_bytes).collect(),
+    ))
 }
 
-/// Convert WAV to raw telephony format using sox
-pub fn convert_to_raw_telephony(
-    wav_data: &[u8],
-    target_format: &crate::tts::AudioFormat,
-) -> Result<Vec<u8>, TtsError> {
-    use crate::tts::AudioFormat;
+fn sox(wav_data: &[u8], sox_type: &[&str], format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
+    let error = |message: String| TtsError::AudioConversionError(message);
 
-    // Always use sox conversion - works for both Google TTS and eSpeak WAV files
-    match target_format {
-        AudioFormat::Ulaw => convert_wav_to_telephony_format(wav_data, "ul", "µ-law"),
-        AudioFormat::Alaw => convert_wav_to_telephony_format(wav_data, "al", "A-law"),
-        AudioFormat::Gsm => convert_wav_to_telephony_format(wav_data, "gsm", "GSM"),
-        AudioFormat::Sln16 => convert_wav_to_sln16(wav_data),
-        _ => Err(TtsError::AudioConversionError(format!(
-            "Unsupported telephony format: {}",
-            target_format
-        ))),
+    let mut input = tempfile::Builder::new()
+        .suffix(".wav")
+        .tempfile()
+        .map_err(|e| error(format!("Failed to create temp file: {e}")))?;
+    input
+        .write_all(wav_data)
+        .map_err(|e| error(format!("Failed to write temp WAV: {e}")))?;
+
+    let input_path = input
+        .path()
+        .to_str()
+        .ok_or_else(|| error("Temp file path is not UTF-8".to_string()))?;
+    let sample_rate = format.sample_rate().to_string();
+    let mut args = vec![input_path];
+    args.extend_from_slice(sox_type);
+    args.extend_from_slice(&["-r", &sample_rate, "-c", "1", "-"]);
+    eprintln!("Running: sox {}", args.join(" "));
+
+    let output = Command::new("sox")
+        .args(&args)
+        .output()
+        .map_err(|e| error(format!("Failed to run sox for {format}: {e}")))?;
+    if !output.status.success() {
+        return Err(error(format!(
+            "sox failed to convert to {format}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
     }
+    Ok(output.stdout)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tts::AudioFormat;
 
     fn wav(sample_rate: u32, samples: &[i16]) -> Vec<u8> {
         let spec = hound::WavSpec {
@@ -144,13 +106,18 @@ mod tests {
     #[test]
     fn sln16_from_a_16_khz_wav_is_its_samples_without_a_header() {
         let samples = [0, 1, -1, i16::MAX, i16::MIN, 0x1234];
-        let raw = convert_to_raw_telephony(&wav(16000, &samples), &AudioFormat::Sln16).unwrap();
+        let raw = wav_to_raw(&wav(16000, &samples), &AudioFormat::Sln16).unwrap();
         let expected: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
         assert_eq!(raw, expected);
     }
 
     #[test]
     fn sln16_rejects_data_that_is_not_wav() {
-        assert!(convert_to_raw_telephony(b"not a wav file", &AudioFormat::Sln16).is_err());
+        assert!(wav_to_raw(b"not a wav file", &AudioFormat::Sln16).is_err());
+    }
+
+    #[test]
+    fn only_raw_formats_are_converted() {
+        assert!(wav_to_raw(&wav(16000, &[0]), &AudioFormat::Mp3).is_err());
     }
 }

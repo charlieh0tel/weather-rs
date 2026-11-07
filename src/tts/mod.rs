@@ -42,7 +42,7 @@ pub enum AudioFormat {
 }
 
 impl AudioFormat {
-    pub fn telephony_sample_rate(&self) -> u32 {
+    pub fn sample_rate(&self) -> u32 {
         match self {
             AudioFormat::Ulaw | AudioFormat::Alaw | AudioFormat::Gsm => 8000,
             AudioFormat::Sln16 => 16000,
@@ -51,7 +51,7 @@ impl AudioFormat {
     }
 
     /// Headerless formats for Asterisk, made from WAV.
-    pub fn is_telephony_format(&self) -> bool {
+    pub fn is_raw(&self) -> bool {
         matches!(
             self,
             AudioFormat::Ulaw | AudioFormat::Alaw | AudioFormat::Gsm | AudioFormat::Sln16
@@ -181,10 +181,9 @@ impl TtsPlayer {
             return Ok(audio_data.to_vec());
         }
 
-        // Support conversions from WAV to telephony formats
         match (from_format, to_format) {
-            (AudioFormat::Wav, target) if target.is_telephony_format() => {
-                crate::tts::audio_conversion::convert_to_raw_telephony(audio_data, target)
+            (AudioFormat::Wav, target) if target.is_raw() => {
+                audio_conversion::wav_to_raw(audio_data, target)
             }
             _ => Err(TtsError::AudioConversionError(format!(
                 "Conversion from {} to {} is not yet supported",
