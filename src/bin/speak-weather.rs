@@ -216,9 +216,9 @@ mod tests {
             "-f",
             "brief",
             "-a",
-            "ulaw",
+            "sln16",
             "-o",
-            "out.ulaw",
+            "out.sln16",
             "KSJC",
         ])
         .unwrap();

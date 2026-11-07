@@ -92,7 +92,7 @@ impl GoogleTts {
     fn audio_format_to_google_encoding(&self, format: &AudioFormat) -> Result<&str, TtsError> {
         match format {
             AudioFormat::Mp3 => Ok("MP3"),
-            AudioFormat::Wav => Ok("LINEAR16"),
+            AudioFormat::Wav | AudioFormat::Sln16 => Ok("LINEAR16"),
             AudioFormat::Ogg => Ok("OGG_OPUS"),
             AudioFormat::Ulaw => Ok("MULAW"),
             AudioFormat::Alaw => Ok("ALAW"),
@@ -159,8 +159,8 @@ impl TtsBackend for GoogleTts {
 
         let encoding = self.audio_format_to_google_encoding(google_format)?;
 
-        // Use appropriate sample rate for the format
-        let sample_rate = google_format.telephony_sample_rate();
+        // Google resamples, so a WAV to be converted already has the target format's rate.
+        let sample_rate = format.telephony_sample_rate();
 
         let request = TtsRequest {
             input: TtsInput {

@@ -37,22 +37,24 @@ pub enum AudioFormat {
     Alaw,
     /// GSM format (telephony)
     Gsm,
+    /// Raw 16-bit signed linear at 16 kHz, for Asterisk to convert as each channel needs
+    Sln16,
 }
 
 impl AudioFormat {
-    /// Get the appropriate sample rate for telephony compatibility
     pub fn telephony_sample_rate(&self) -> u32 {
         match self {
             AudioFormat::Ulaw | AudioFormat::Alaw | AudioFormat::Gsm => 8000,
-            _ => 22050, // Standard quality for other formats
+            AudioFormat::Sln16 => 16000,
+            _ => 22050,
         }
     }
 
-    /// Check if this format requires telephony-compatible sample rate
+    /// Headerless formats for Asterisk, made from WAV.
     pub fn is_telephony_format(&self) -> bool {
         matches!(
             self,
-            AudioFormat::Ulaw | AudioFormat::Alaw | AudioFormat::Gsm
+            AudioFormat::Ulaw | AudioFormat::Alaw | AudioFormat::Gsm | AudioFormat::Sln16
         )
     }
 
@@ -64,6 +66,7 @@ impl AudioFormat {
             AudioFormat::Ulaw => "ulaw",
             AudioFormat::Alaw => "alaw",
             AudioFormat::Gsm => "gsm",
+            AudioFormat::Sln16 => "sln16",
         }
     }
 
@@ -110,6 +113,7 @@ impl fmt::Display for AudioFormat {
             AudioFormat::Ulaw => "ULAW",
             AudioFormat::Alaw => "ALAW",
             AudioFormat::Gsm => "GSM",
+            AudioFormat::Sln16 => "SLN16",
         };
         write!(f, "{}", name)
     }
@@ -297,6 +301,7 @@ mod tests {
         let cases = [
             (None, None, "MP3"),
             (None, Some("out.ulaw"), "ULAW"),
+            (None, Some("out.sln16"), "SLN16"),
             (None, Some("out.WAV"), "WAV"),
             (None, Some("out.unknown"), "MP3"),
             (None, Some("no_extension"), "MP3"),
