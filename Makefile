@@ -18,12 +18,12 @@ build:
 	$(BUILD_CMD)
 .PHONY: build
 
-test: build test-weather test-all-formats test-speech test-text
+test: build test-metar test-all-formats test-speech test-text
 .PHONY: test
 
-test-weather: build
-	$(RUN_CMD) weather -- $(ICAO)
-.PHONY: test-weather
+test-metar: build
+	$(RUN_CMD) metar -- $(ICAO)
+.PHONY: test-metar
 
 test-all-formats: $(addprefix test-espeak-,$(FORMATS)) $(addprefix test-google-,$(FORMATS))
 .PHONY: test-all-formats
