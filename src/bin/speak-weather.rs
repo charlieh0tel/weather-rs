@@ -90,6 +90,10 @@ struct GoogleArgs {
     /// Any Google voice by its full name, such as en-US-Chirp3-HD-Leda (overrides --voice)
     #[arg(long, conflicts_with = "voice")]
     voice_name: Option<String>,
+
+    /// Volume relative to the voice's native level, in dB (-96 to 16)
+    #[arg(long, default_value_t = 0.0, allow_negative_numbers = true)]
+    gain: f64,
 }
 
 #[derive(Args, Debug)]
@@ -201,7 +205,8 @@ fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
     let tts = match args.voice_name {
         Some(name) => GoogleTts::with_voice_name(api_key, &name)?,
         None => GoogleTts::new(api_key, args.voice.into()),
-    };
+    }
+    .with_gain(args.gain)?;
     let audio_format = AudioFormat::resolve(
         args.audio_format,
         args.common.output.as_deref(),
@@ -264,6 +269,8 @@ mod tests {
             "google",
             "--voice-name",
             "en-US-Chirp3-HD-Leda",
+            "--gain",
+            "6",
             "-f",
             "brief",
             "-a",

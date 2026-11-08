@@ -52,7 +52,11 @@ pub struct GoogleTts {
     api_key: String,
     voice_name: String,
     language_code: String,
+    gain_db: f64,
 }
+
+/// The range of gains Google accepts.
+const GAIN_DB_RANGE: std::ops::RangeInclusive<f64> = -96.0..=16.0;
 
 impl GoogleTts {
     pub fn new(api_key: String, voice: GoogleVoice) -> Self {
@@ -60,7 +64,20 @@ impl GoogleTts {
             api_key,
             voice_name: voice.google_voice_name().to_string(),
             language_code: voice.language_code().to_string(),
+            gain_db: 0.0,
         }
+    }
+
+    /// Makes the voice louder or softer than its native volume by `gain_db` decibels.
+    pub fn with_gain(self, gain_db: f64) -> Result<Self, TtsError> {
+        if !GAIN_DB_RANGE.contains(&gain_db) {
+            return Err(TtsError::SynthesisError(format!(
+                "Gain must be from {} to {} dB, not {gain_db}",
+                GAIN_DB_RANGE.start(),
+                GAIN_DB_RANGE.end()
+            )));
+        }
+        Ok(Self { gain_db, ..self })
     }
 
     /// Uses any Google voice by its full name, such as `en-US-Chirp3-HD-Leda`.
@@ -74,6 +91,7 @@ impl GoogleTts {
             api_key,
             voice_name: voice_name.to_string(),
             language_code: language_code.to_string(),
+            gain_db: 0.0,
         })
     }
 
@@ -139,6 +157,8 @@ struct AudioConfig {
     audio_encoding: String,
     #[serde(rename = "sampleRateHertz")]
     sample_rate_hertz: u32,
+    #[serde(rename = "volumeGainDb")]
+    volume_gain_db: f64,
 }
 
 #[derive(Deserialize)]
@@ -161,6 +181,7 @@ impl TtsBackend for GoogleTts {
             audio_config: AudioConfig {
                 audio_encoding: google_encoding(format).to_string(),
                 sample_rate_hertz: format.sample_rate(),
+                volume_gain_db: self.gain_db,
             },
         };
 
@@ -224,6 +245,7 @@ mod tests {
             audio_config: AudioConfig {
                 audio_encoding: "MP3".to_string(),
                 sample_rate_hertz: 22050,
+                volume_gain_db: 0.0,
             },
         };
 
@@ -259,5 +281,14 @@ mod tests {
         assert_eq!(tts.voice_name, "en-US-Chirp3-HD-Leda");
         assert_eq!(tts.language_code, "en-US");
         assert!(GoogleTts::with_voice_name("key".to_string(), "Leda").is_err());
+    }
+
+    #[test]
+    fn gain_must_be_in_googles_range() {
+        let tts = || GoogleTts::new("key".to_string(), GoogleVoice::Default);
+        assert_eq!(tts().with_gain(6.0).unwrap().gain_db, 6.0);
+        assert_eq!(tts().with_gain(-96.0).unwrap().gain_db, -96.0);
+        assert!(tts().with_gain(16.5).is_err());
+        assert!(tts().with_gain(f64::NAN).is_err());
     }
 }
