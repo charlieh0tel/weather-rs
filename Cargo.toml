@@ -5,7 +5,7 @@ version = "0.9.8"
 publish = false
 edition = "2024"
 license = "BSD-3-Clause"
-description = "Weather application with text-to-speech support"
+description = "Aviation weather (METAR) reports with text-to-speech"
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
@@ -24,10 +24,12 @@ maintainer = "Christopher Hoover <ch@murgatroid.com>"
 copyright = "2025, Christopher Hoover <ch@murgatroid.com>"
 license-file = ["LICENSE", "4"]
 extended-description = """\
-A weather application with text-to-speech support.
-Supports multiple TTS backends including espeak and Google TTS."""
-depends = "$auto, libespeak-ng1, sox"
-section = "utility"
+metar fetches and decodes current METARs from aviationweather.gov.
+speak-weather reads them aloud with eSpeak NG or Google Cloud
+Text-to-Speech, or writes audio files for Asterisk and AllStar nodes."""
+# HTTPS verifies against the system's certificate store.
+depends = "$auto, ca-certificates, sox"
+section = "utils"
 priority = "optional"
 assets = [
     ["target/release/metar", "usr/bin/", "755"],
