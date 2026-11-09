@@ -1,0 +1,23 @@
+[
+    {
+        "place_id": 323103186,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "relation",
+        "osm_id": 1544956,
+        "lat": "37.3893889",
+        "lon": "-122.0832101",
+        "category": "boundary",
+        "type": "administrative",
+        "place_rank": 16,
+        "importance": 0.5677073111844293,
+        "addresstype": "city",
+        "name": "Mountain View",
+        "display_name": "Mountain View, Santa Clara County, California, United States",
+        "boundingbox": [
+            "37.3542156",
+            "37.4710658",
+            "-122.1175575",
+            "-122.0449574"
+        ]
+    }
+]

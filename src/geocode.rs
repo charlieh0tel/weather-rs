@@ -1,12 +1,15 @@
-//! US street addresses located with the US Census geocoder, which needs no API key.
+//! Places located by name: US street addresses with the US Census geocoder, and anything else
+//! with OpenStreetMap's Nominatim.  Neither needs an API key.
 
 use serde::Deserialize;
 
 use super::nws::{Coordinates, Place};
 use super::{Result, WeatherError, get_json};
 
-const SERVICE: &str = "geocoding.geo.census.gov";
-const URL: &str = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress";
+const CENSUS: &str = "geocoding.geo.census.gov";
+const CENSUS_URL: &str = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress";
+const NOMINATIM: &str = "nominatim.openstreetmap.org";
+const NOMINATIM_URL: &str = "https://nominatim.openstreetmap.org/search";
 
 #[derive(Debug, Deserialize)]
 struct Response {
@@ -32,11 +35,11 @@ struct Xy {
     y: f64,
 }
 
-pub(super) fn locate(client: &reqwest::blocking::Client, address: &str) -> Result<Place> {
+pub(super) fn locate_address(client: &reqwest::blocking::Client, address: &str) -> Result<Place> {
     let response = get_json(
         client,
-        SERVICE,
-        URL,
+        CENSUS,
+        CENSUS_URL,
         &[
             ("benchmark", "Public_AR_Current"),
             ("format", "json"),
@@ -44,6 +47,45 @@ pub(super) fn locate(client: &reqwest::blocking::Client, address: &str) -> Resul
         ],
     )?;
     best_match(address, response)
+}
+
+#[derive(Debug, Deserialize)]
+struct NominatimPlace {
+    lat: String,
+    lon: String,
+    display_name: String,
+}
+
+/// Locates a place by name, such as "Mountain View, CA", in the US.
+pub(super) fn locate_name(client: &reqwest::blocking::Client, name: &str) -> Result<Place> {
+    let places = get_json(
+        client,
+        NOMINATIM,
+        NOMINATIM_URL,
+        &[
+            ("q", name),
+            ("format", "jsonv2"),
+            ("limit", "1"),
+            ("countrycodes", "us"),
+        ],
+    )?;
+    first_place(name, places)
+}
+
+fn first_place(name: &str, places: Vec<NominatimPlace>) -> Result<Place> {
+    let place = places
+        .into_iter()
+        .next()
+        .ok_or_else(|| WeatherError::PlaceNotFound(name.to_string()))?;
+    let degrees = |value: &str| {
+        value.parse().map_err(|_| {
+            WeatherError::InvalidJson(format!("{NOMINATIM} gave '{value}' as a coordinate"))
+        })
+    };
+    Ok(Place {
+        coordinates: Coordinates::new(degrees(&place.lat)?, degrees(&place.lon)?)?,
+        name: Some(place.display_name),
+    })
 }
 
 fn best_match(address: &str, response: Response) -> Result<Place> {
@@ -75,6 +117,23 @@ mod tests {
             Some("200 E SANTA CLARA ST, SAN JOSE, CA, 95113")
         );
         assert_eq!(place.coordinates.to_string(), "37.3382,-121.8862");
+    }
+
+    #[test]
+    fn locates_a_place_by_name() {
+        let places = parse_json(include_str!("testdata/nominatim.json")).unwrap();
+
+        let place = first_place("Mountain View, CA", places).unwrap();
+
+        assert_eq!(
+            place.name.as_deref(),
+            Some("Mountain View, Santa Clara County, California, United States")
+        );
+        assert_eq!(place.coordinates.to_string(), "37.3894,-122.0832");
+        assert!(matches!(
+            first_place("Nowhere", Vec::new()),
+            Err(WeatherError::PlaceNotFound(name)) if name == "Nowhere"
+        ));
     }
 
     #[test]
