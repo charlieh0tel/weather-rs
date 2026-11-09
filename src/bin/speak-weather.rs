@@ -10,7 +10,7 @@ use weather::{
 };
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Speak aviation weather with multiple TTS engines", long_about = None)]
+#[command(name = "speak-weather", author, version, about = "Speak aviation weather with multiple TTS engines", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -171,6 +171,10 @@ fn main() {
 }
 
 #[cfg(test)]
+#[path = "common/man_page.rs"]
+mod man_page;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use clap::CommandFactory;
@@ -178,6 +182,11 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn man_pages_are_up_to_date() {
+        man_page::check(Cli::command());
     }
 
     #[test]

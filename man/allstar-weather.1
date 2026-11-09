@@ -1,0 +1,114 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH allstar-weather 1  "allstar-weather " 
+.SH NAME
+allstar\-weather \- Announce the weather on an AllStar node
+.SH SYNOPSIS
+\fBallstar\-weather\fR [\fB\-r\fR|\fB\-\-report\fR] [\fB\-f\fR|\fB\-\-format\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-periods\fR] [\fB\-e\fR|\fB\-\-engine\fR] [\fB\-v\fR|\fB\-\-voice\-name\fR] [\fB\-g\fR|\fB\-\-gain\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-w\fR|\fB\-\-wait\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fINODE\fR> <\fILOCATION\fR> 
+.SH DESCRIPTION
+Announce the weather on an AllStar node.
+.PP
+Speaks a report and plays it on the node with `rpt localplay`, running `sudo \-u asterisk asterisk`, which must not ask for a password.
+.SH OPTIONS
+.TP
+\fB\-r\fR, \fB\-\-report\fR \fI<REPORT>\fR [default: metar]
+What to announce
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+metar: Current conditions at an airport, from aviationweather.gov
+.IP \(bu 2
+forecast: The National Weather Service forecast (US only)
+.IP \(bu 2
+alerts: Active National Weather Service alerts (US only)
+.RE
+.TP
+\fB\-f\fR, \fB\-\-format\fR \fI<FORMAT>\fR [default: brief]
+Output format for the metar announcement
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+speech: Direct speech output
+.IP \(bu 2
+brief: Brief announcement format, without the station name
+.IP \(bu 2
+detailed: Detailed weather report
+.IP \(bu 2
+aviation: Aviation radio style
+.RE
+.TP
+\fB\-t\fR, \fB\-\-temp\-unit\fR \fI<TEMP_UNIT>\fR [default: fahrenheit]
+Temperature unit for metar (the detailed format always gives both)
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+fahrenheit
+.IP \(bu 2
+celsius
+.RE
+.TP
+\fB\-\-periods\fR \fI<PERIODS>\fR
+Number of half\-day forecast periods [default: 2]
+.TP
+\fB\-e\fR, \fB\-\-engine\fR \fI<ENGINE>\fR [default: google]
+Text\-to\-speech engine
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+google: Google Cloud TTS (needs an API key)
+.IP \(bu 2
+espeak: eSpeak NG
+.RE
+.TP
+\fB\-v\fR, \fB\-\-voice\-name\fR \fI<VOICE_NAME>\fR
+Google voice name [default: en\-US\-Chirp3\-HD\-Leda]
+.TP
+\fB\-g\fR, \fB\-\-gain\fR \fI<GAIN>\fR
+Google volume gain in dB, \-96 to 16 [default: 6]
+.TP
+\fB\-a\fR, \fB\-\-audio\-format\fR \fI<AUDIO_FORMAT>\fR [default: sln16]
+Audio format to play (sln16 needs Asterisk\*(Aqs codec_resample module)
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+mp3: MP3 format
+.IP \(bu 2
+wav: WAV format (uncompressed)
+.IP \(bu 2
+ogg: OGG format
+.IP \(bu 2
+ulaw: ULAW format (8\-bit G.711)
+.IP \(bu 2
+alaw: ALAW format (8\-bit G.711)
+.IP \(bu 2
+gsm: GSM format (telephony)
+.IP \(bu 2
+sln16: Raw 16\-bit signed linear at 16 kHz, for Asterisk to convert as each channel needs
+.RE
+.TP
+\fB\-w\fR, \fB\-\-wait\fR \fI<WAIT>\fR [default: 60]
+Seconds a busy node gets to open the audio file before it is deleted
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+<\fINODE\fR>
+AllStar node number
+.TP
+<\fILOCATION\fR>
+ICAO airport for metar (e.g., KSJC); station, lat,lon or US address for forecast and alerts

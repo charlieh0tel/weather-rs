@@ -16,5 +16,8 @@
   (https://google.github.io/styleguide/shellguide.html).
 - `shellcheck` must pass on all shell scripts before commits.  Ask first
   before adding any waiver (e.g. a `# shellcheck disable=` directive).
+- The man pages in man/ are generated from the commands' clap
+  definitions.  After changing options or help text, run
+  `UPDATE_MAN_PAGES=1 cargo test` and commit the result.
 - speak-weather reads the Google TTS API key from
   ~/.config/speak-weather/google-api-key (or GOOGLE_CLOUD_API_KEY).

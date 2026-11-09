@@ -1,0 +1,23 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH speak-weather 1  "speak-weather " 
+.SH NAME
+speak\-weather \- Speak aviation weather with multiple TTS engines
+.SH SYNOPSIS
+\fBspeak\-weather\fR [\fB\-h\fR|\fB\-\-help\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Speak aviation weather with multiple TTS engines
+.SH OPTIONS
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+speak\-weather\-espeak(1)
+Use eSpeak TTS engine
+.TP
+speak\-weather\-google(1)
+Use Google Cloud TTS engine
+.TP
+speak\-weather\-text(1)
+Output text for external TTS engines

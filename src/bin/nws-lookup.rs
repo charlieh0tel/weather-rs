@@ -3,6 +3,7 @@ use weather::nws::{Location, NwsClient};
 
 #[derive(Parser, Debug)]
 #[command(
+    name = "nws-lookup",
     author,
     version,
     about = "Find the National Weather Service identifiers for a location",
@@ -73,6 +74,10 @@ fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
+#[path = "common/man_page.rs"]
+mod man_page;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use clap::CommandFactory;
@@ -80,6 +85,11 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         Args::command().debug_assert();
+    }
+
+    #[test]
+    fn man_pages_are_up_to_date() {
+        man_page::check(Args::command());
     }
 
     #[test]

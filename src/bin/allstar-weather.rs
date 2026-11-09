@@ -31,7 +31,7 @@ enum Engine {
 /// Speaks a report and plays it on the node with `rpt localplay`, running
 /// `sudo -u asterisk asterisk`, which must not ask for a password.
 #[derive(Parser, Debug)]
-#[command(version, mut_arg("format", |arg| arg.default_value("brief")))]
+#[command(name = "allstar-weather", version, mut_arg("format", |arg| arg.default_value("brief")))]
 struct Cli {
     /// AllStar node number
     node: u32,
@@ -113,6 +113,10 @@ fn main() {
 }
 
 #[cfg(test)]
+#[path = "common/man_page.rs"]
+mod man_page;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use clap::CommandFactory;
@@ -126,6 +130,11 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn man_pages_are_up_to_date() {
+        man_page::check(Cli::command());
     }
 
     #[test]

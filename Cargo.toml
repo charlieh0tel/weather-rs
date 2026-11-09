@@ -19,6 +19,9 @@ rodio = "0.22"
 hound = "3.5"
 tempfile = "3.8"
 
+[dev-dependencies]
+clap_mangen = "0.3"
+
 [package.metadata.deb]
 maintainer = "Christopher Hoover <ch@murgatroid.com>"
 copyright = "2025, Christopher Hoover <ch@murgatroid.com>"
@@ -39,4 +42,5 @@ assets = [
     ["target/release/nws-lookup", "usr/bin/", "755"],
     ["target/release/allstar-weather", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/weather/", "644"],
+    ["man/*.1", "usr/share/man/man1/", "644"],
 ]

@@ -1,0 +1,118 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH speak-weather-espeak 1  "espeak " 
+.SH NAME
+speak\-weather\-espeak \- Use eSpeak TTS engine
+.SH SYNOPSIS
+\fBspeak\-weather espeak\fR [\fB\-r\fR|\fB\-\-report\fR] [\fB\-f\fR|\fB\-\-format\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-periods\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-v\fR|\fB\-\-voice\fR] [\fB\-s\fR|\fB\-\-speed\fR] [\fB\-p\fR|\fB\-\-pitch\fR] [\fB\-g\fR|\fB\-\-gap\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fILOCATION\fR> 
+.SH DESCRIPTION
+Use eSpeak TTS engine
+.SH OPTIONS
+.TP
+\fB\-r\fR, \fB\-\-report\fR \fI<REPORT>\fR [default: metar]
+What to announce
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+metar: Current conditions at an airport, from aviationweather.gov
+.IP \(bu 2
+forecast: The National Weather Service forecast (US only)
+.IP \(bu 2
+alerts: Active National Weather Service alerts (US only)
+.RE
+.TP
+\fB\-f\fR, \fB\-\-format\fR \fI<FORMAT>\fR [default: speech]
+Output format for the metar announcement
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+speech: Direct speech output
+.IP \(bu 2
+brief: Brief announcement format, without the station name
+.IP \(bu 2
+detailed: Detailed weather report
+.IP \(bu 2
+aviation: Aviation radio style
+.RE
+.TP
+\fB\-t\fR, \fB\-\-temp\-unit\fR \fI<TEMP_UNIT>\fR [default: fahrenheit]
+Temperature unit for metar (the detailed format always gives both)
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+fahrenheit
+.IP \(bu 2
+celsius
+.RE
+.TP
+\fB\-\-periods\fR \fI<PERIODS>\fR
+Number of half\-day forecast periods [default: 2]
+.TP
+\fB\-o\fR, \fB\-\-output\fR \fI<OUTPUT>\fR
+Save output to file instead of speaking/printing
+.TP
+\fB\-a\fR, \fB\-\-audio\-format\fR \fI<AUDIO_FORMAT>\fR
+Audio format for the output file [default: from its extension, else wav]
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+mp3: MP3 format
+.IP \(bu 2
+wav: WAV format (uncompressed)
+.IP \(bu 2
+ogg: OGG format
+.IP \(bu 2
+ulaw: ULAW format (8\-bit G.711)
+.IP \(bu 2
+alaw: ALAW format (8\-bit G.711)
+.IP \(bu 2
+gsm: GSM format (telephony)
+.IP \(bu 2
+sln16: Raw 16\-bit signed linear at 16 kHz, for Asterisk to convert as each channel needs
+.RE
+.TP
+\fB\-v\fR, \fB\-\-voice\fR \fI<VOICE>\fR [default: default]
+Voice to use for speech
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+default: Default voice
+.IP \(bu 2
+us\-female: US English female voice
+.IP \(bu 2
+us\-male: US English male voice
+.IP \(bu 2
+uk\-female: UK English female voice
+.IP \(bu 2
+uk\-male: UK English male voice
+.RE
+.TP
+\fB\-s\fR, \fB\-\-speed\fR \fI<SPEED>\fR
+Speech speed in words per minute [default: from the voice]
+.TP
+\fB\-p\fR, \fB\-\-pitch\fR \fI<PITCH>\fR
+Voice pitch (0\-99) [default: from the voice]
+.TP
+\fB\-g\fR, \fB\-\-gap\fR \fI<GAP>\fR
+Gap between words in 10ms units [default: from the voice]
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+<\fILOCATION\fR>
+ICAO airport for metar (e.g., KSJC); station, lat,lon or US address for forecast and alerts

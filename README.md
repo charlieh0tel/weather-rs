@@ -60,7 +60,8 @@ it is any place `nws-lookup` accepts (see below).
 
 Audio formats (`-a`): `mp3`, `wav`, `ogg`, `ulaw`, `alaw`, `gsm` and `sln16`.
 
-`--help` on each subcommand lists the rest.
+`--help` on each subcommand lists the rest, and each command has a man page,
+such as `man speak-weather-google`.
 
 ### National Weather Service
 
