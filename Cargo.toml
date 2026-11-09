@@ -37,6 +37,6 @@ assets = [
     ["target/release/metar", "usr/bin/", "755"],
     ["target/release/speak-weather", "usr/bin/", "755"],
     ["target/release/nws-lookup", "usr/bin/", "755"],
-    ["allstar-weather.sh", "usr/bin/allstar-weather", "755"],
+    ["target/release/allstar-weather", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/weather/", "644"],
 ]

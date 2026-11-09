@@ -134,8 +134,9 @@ load => codec_resample.so
 `allstar-weather NODE LOCATION` speaks a report and plays it on a node with
 `rpt localplay`.  `-r` chooses the report as for `speak-weather`: the METAR
 for an airport by default, or the forecast or alerts for a place.  It uses
-Google's `en-US-Chirp3-HD-Leda` voice by default; `-h` lists options to
-change the engine, voice, gain, format and style.  It runs well from cron,
+Google's `en-US-Chirp3-HD-Leda` voice, 6 dB louder, by default; `-e`, `-v`,
+`-g` and `-a` change the engine, voice, gain and audio format, and `--help`
+lists the rest.  It runs well from cron,
 for example the METAR every two hours from 9 am to 5 pm, and the forecast at
 6:35 am:
 
