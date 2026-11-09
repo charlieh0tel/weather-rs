@@ -1,8 +1,11 @@
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use std::fmt;
 use std::time::Duration;
 
 mod abbreviations;
+mod geocode;
+pub mod nws;
 pub mod tts;
 mod weather_groups;
 
@@ -14,10 +17,17 @@ pub enum WeatherError {
     InvalidIcao(String),
     HttpClient(String),
     Request(String),
-    HttpStatus(reqwest::StatusCode),
+    HttpStatus {
+        service: &'static str,
+        status: reqwest::StatusCode,
+        detail: Option<String>,
+    },
     EmptyResponse(String),
     InvalidJson(String),
     NoData(String),
+    InvalidLocation(String),
+    AddressNotFound(String),
+    NoForecast(String),
 }
 
 impl fmt::Display for WeatherError {
@@ -30,8 +40,16 @@ impl fmt::Display for WeatherError {
             ),
             WeatherError::HttpClient(msg) => write!(f, "HTTP client error: {}", msg),
             WeatherError::Request(msg) => write!(f, "Request failed: {}", msg),
-            WeatherError::HttpStatus(status) => {
-                write!(f, "aviationweather.gov returned HTTP status {}", status)
+            WeatherError::HttpStatus {
+                service,
+                status,
+                detail,
+            } => {
+                write!(f, "{service} returned HTTP status {status}")?;
+                match detail {
+                    Some(detail) => write!(f, ": {detail}"),
+                    None => Ok(()),
+                }
             }
             WeatherError::EmptyResponse(icao) => write!(
                 f,
@@ -44,6 +62,16 @@ impl fmt::Display for WeatherError {
                 "No weather data found for ICAO: {}. This airport may not report METAR data or may not be a valid ICAO identifier.\nCommon reasons:\n- Small airports may not have weather reporting\n- Try the full ICAO code (US airports: add 'K' prefix, e.g., KRHV)\n- Verify the airport code at https://aviationweather.gov",
                 icao
             ),
+            WeatherError::InvalidLocation(location) => write!(
+                f,
+                "Invalid location '{location}': expected an ICAO station, latitude,longitude or a US street address"
+            ),
+            WeatherError::AddressNotFound(address) => {
+                write!(f, "The Census geocoder found no match for '{address}'")
+            }
+            WeatherError::NoForecast(point) => {
+                write!(f, "api.weather.gov has no forecast for {point}")
+            }
         }
     }
 }
@@ -55,7 +83,7 @@ impl WeatherError {
     fn is_transient(&self) -> bool {
         match self {
             WeatherError::Request(_) => true,
-            WeatherError::HttpStatus(status) => {
+            WeatherError::HttpStatus { status, .. } => {
                 status.is_server_error() || *status == reqwest::StatusCode::TOO_MANY_REQUESTS
             }
             _ => false,
@@ -213,6 +241,11 @@ pub fn celsius_to_fahrenheit(c: f64) -> f64 {
     (c * 9.0 / 5.0) + 32.0
 }
 
+const USER_AGENT: &str = concat!(
+    "weather-rs/",
+    env!("CARGO_PKG_VERSION"),
+    " (https://github.com/charlieh0tel/weather-rs)"
+);
 const RETRIES: u32 = 2;
 const RETRY_DELAY: Duration = Duration::from_secs(2);
 
@@ -228,28 +261,91 @@ fn validate_icao(icao: &str) -> Result<()> {
 pub fn fetch_weather_data(icao: &str) -> Result<MetarData> {
     validate_icao(icao)?;
 
-    let url = format!(
-        "https://aviationweather.gov/api/data/metar?ids={}&format=json",
-        icao.to_uppercase()
-    );
+    let url = url_with_query(
+        "https://aviationweather.gov/api/data/metar",
+        &[("ids", &icao.to_uppercase()), ("format", "json")],
+    )?;
 
-    let client = reqwest::blocking::Client::builder()
-        .user_agent("aviation-weather-cli/0.1.0")
-        .build()
-        .map_err(|e| WeatherError::HttpClient(e.to_string()))?;
-
+    let client = http_client()?;
     with_retries(RETRY_DELAY, || {
-        let response = client
-            .get(&url)
-            .send()
-            .map_err(|e| WeatherError::Request(e.to_string()))?;
-        let status = response.status();
-        let body = response
-            .text()
-            .map_err(|e| WeatherError::Request(e.to_string()))?;
-
+        let (status, body) = get(&client, &url)?;
         parse_metar_response(icao, status, &body)
     })
+}
+
+fn http_client() -> Result<reqwest::blocking::Client> {
+    reqwest::blocking::Client::builder()
+        .user_agent(USER_AGENT)
+        .build()
+        .map_err(|e| WeatherError::HttpClient(e.to_string()))
+}
+
+fn url_with_query(url: &str, query: &[(&str, &str)]) -> Result<reqwest::Url> {
+    let mut url = reqwest::Url::parse(url).map_err(|e| WeatherError::HttpClient(e.to_string()))?;
+    if !query.is_empty() {
+        url.query_pairs_mut().extend_pairs(query);
+    }
+    Ok(url)
+}
+
+fn get(
+    client: &reqwest::blocking::Client,
+    url: &reqwest::Url,
+) -> Result<(reqwest::StatusCode, String)> {
+    let response = client
+        .get(url.clone())
+        .send()
+        .map_err(|e| WeatherError::Request(e.to_string()))?;
+    let status = response.status();
+    let body = response
+        .text()
+        .map_err(|e| WeatherError::Request(e.to_string()))?;
+    Ok((status, body))
+}
+
+fn get_json<T: DeserializeOwned>(
+    client: &reqwest::blocking::Client,
+    service: &'static str,
+    url: &str,
+    query: &[(&str, &str)],
+) -> Result<T> {
+    let url = url_with_query(url, query)?;
+    with_retries(RETRY_DELAY, || {
+        let (status, body) = get(client, &url)?;
+        check_status(service, status, &body)?;
+        parse_json(&body)
+    })
+}
+
+/// An error body: an RFC 7807 problem from api.weather.gov, or the Census geocoder's error list.
+#[derive(Deserialize)]
+struct Problem {
+    detail: Option<String>,
+    #[serde(default)]
+    errors: Vec<String>,
+}
+
+fn check_status(service: &'static str, status: reqwest::StatusCode, body: &str) -> Result<()> {
+    if status.is_success() {
+        return Ok(());
+    }
+    let detail = serde_json::from_str::<Problem>(body)
+        .ok()
+        .and_then(|problem| {
+            problem
+                .detail
+                .or_else(|| (!problem.errors.is_empty()).then(|| problem.errors.join("; ")))
+        })
+        .filter(|detail| Some(detail.as_str()) != status.canonical_reason());
+    Err(WeatherError::HttpStatus {
+        service,
+        status,
+        detail,
+    })
+}
+
+fn parse_json<T: DeserializeOwned>(body: &str) -> Result<T> {
+    serde_json::from_str(body).map_err(|e| WeatherError::InvalidJson(format!("{}: {}", e, body)))
 }
 
 fn with_retries<T>(delay: Duration, mut attempt: impl FnMut() -> Result<T>) -> Result<T> {
@@ -266,16 +362,13 @@ fn with_retries<T>(delay: Duration, mut attempt: impl FnMut() -> Result<T>) -> R
 }
 
 fn parse_metar_response(icao: &str, status: reqwest::StatusCode, body: &str) -> Result<MetarData> {
-    if !status.is_success() {
-        return Err(WeatherError::HttpStatus(status));
-    }
+    check_status("aviationweather.gov", status, body)?;
 
     if body.is_empty() {
         return Err(WeatherError::EmptyResponse(icao.to_string()));
     }
 
-    let response: Vec<MetarData> = serde_json::from_str(body)
-        .map_err(|e| WeatherError::InvalidJson(format!("{}: {}", e, body)))?;
+    let response: Vec<MetarData> = parse_json(body)?;
 
     response
         .into_iter()
@@ -418,11 +511,11 @@ mod tests {
 
         assert!(matches!(
             error(StatusCode::BAD_REQUEST, r#"{"status":"error"}"#),
-            WeatherError::HttpStatus(_)
+            WeatherError::HttpStatus { .. }
         ));
         assert!(matches!(
             error(StatusCode::INTERNAL_SERVER_ERROR, "<html>"),
-            WeatherError::HttpStatus(_)
+            WeatherError::HttpStatus { .. }
         ));
         assert!(matches!(
             error(StatusCode::NO_CONTENT, ""),
@@ -438,6 +531,37 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn encodes_query_parameters() {
+        let url = |query| url_with_query("https://example.com/a/1,2", query).unwrap();
+
+        assert_eq!(url(&[]).as_str(), "https://example.com/a/1,2");
+        assert_eq!(
+            url(&[("point", "37.3,-122"), ("address", "200 E St, San Jose")]).as_str(),
+            "https://example.com/a/1,2?point=37.3%2C-122&address=200+E+St%2C+San+Jose"
+        );
+    }
+
+    #[test]
+    fn reports_the_detail_of_failed_responses() {
+        let detail = |body| match check_status("test", reqwest::StatusCode::NOT_FOUND, body) {
+            Err(WeatherError::HttpStatus { detail, .. }) => detail,
+            other => panic!("{other:?}"),
+        };
+
+        assert_eq!(
+            detail(r#"{"title": "Not Found", "detail": "Unable to provide data"}"#).as_deref(),
+            Some("Unable to provide data")
+        );
+        assert_eq!(
+            detail(r#"{"errors": ["Address cannot be empty", "Bad benchmark"]}"#).as_deref(),
+            Some("Address cannot be empty; Bad benchmark")
+        );
+        assert_eq!(detail(r#"{"detail": "Not Found"}"#), None);
+        assert_eq!(detail("<html>"), None);
+        assert_eq!(detail("{}"), None);
+    }
+
     fn count_attempts(mut outcome: impl FnMut(u32) -> Result<()>) -> (u32, Result<()>) {
         let mut attempts = 0;
         let result = with_retries(Duration::ZERO, || {
@@ -447,8 +571,16 @@ mod tests {
         (attempts, result)
     }
 
+    fn http_status(status: reqwest::StatusCode) -> WeatherError {
+        WeatherError::HttpStatus {
+            service: "test",
+            status,
+            detail: None,
+        }
+    }
+
     fn gateway_timeout() -> WeatherError {
-        WeatherError::HttpStatus(reqwest::StatusCode::GATEWAY_TIMEOUT)
+        http_status(reqwest::StatusCode::GATEWAY_TIMEOUT)
     }
 
     #[test]
@@ -468,7 +600,7 @@ mod tests {
         let (attempts, result) = count_attempts(|_| Err(gateway_timeout()));
 
         assert_eq!(attempts, 3);
-        assert!(matches!(result, Err(WeatherError::HttpStatus(_))));
+        assert!(matches!(result, Err(WeatherError::HttpStatus { .. })));
     }
 
     #[test]
@@ -479,7 +611,7 @@ mod tests {
     #[test]
     fn does_not_retry_failures_that_would_repeat() {
         let failures: [fn() -> WeatherError; 4] = [
-            || WeatherError::HttpStatus(reqwest::StatusCode::BAD_REQUEST),
+            || http_status(reqwest::StatusCode::BAD_REQUEST),
             || WeatherError::NoData("KSJC".to_string()),
             || WeatherError::EmptyResponse("KSJC".to_string()),
             || WeatherError::InvalidJson("<html>".to_string()),
@@ -492,7 +624,7 @@ mod tests {
 
     #[test]
     fn retries_when_rate_limited() {
-        let rate_limited = WeatherError::HttpStatus(reqwest::StatusCode::TOO_MANY_REQUESTS);
+        let rate_limited = http_status(reqwest::StatusCode::TOO_MANY_REQUESTS);
 
         assert!(rate_limited.is_transient());
     }

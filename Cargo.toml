@@ -26,7 +26,9 @@ license-file = ["LICENSE", "4"]
 extended-description = """\
 metar fetches and decodes current METARs from aviationweather.gov.
 speak-weather reads them aloud with eSpeak NG or Google Cloud
-Text-to-Speech, or writes audio files for Asterisk and AllStar nodes."""
+Text-to-Speech, or writes audio files for Asterisk and AllStar nodes.
+nws-lookup finds the National Weather Service forecast office, grid,
+zones and observation stations for a station, coordinates or address."""
 # HTTPS verifies against the system's certificate store.
 depends = "$auto, ca-certificates, sox"
 section = "utils"
@@ -34,6 +36,7 @@ priority = "optional"
 assets = [
     ["target/release/metar", "usr/bin/", "755"],
     ["target/release/speak-weather", "usr/bin/", "755"],
+    ["target/release/nws-lookup", "usr/bin/", "755"],
     ["allstar-weather.sh", "usr/bin/allstar-weather", "755"],
     ["README.md", "usr/share/doc/weather/", "644"],
 ]
