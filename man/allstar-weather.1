@@ -4,11 +4,11 @@
 .SH NAME
 allstar\-weather \- Announce the weather on an AllStar node
 .SH SYNOPSIS
-\fBallstar\-weather\fR [\fB\-r\fR|\fB\-\-report\fR] [\fB\-f\fR|\fB\-\-format\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-periods\fR] [\fB\-\-only\-if\-alerts\fR] [\fB\-e\fR|\fB\-\-engine\fR] [\fB\-v\fR|\fB\-\-voice\-name\fR] [\fB\-g\fR|\fB\-\-gain\fR] [\fB\-\-api\-key\-file\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-w\fR|\fB\-\-wait\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fINODE\fR> <\fILOCATION\fR> 
+\fBallstar\-weather\fR [\fB\-r\fR|\fB\-\-report\fR] [\fB\-f\fR|\fB\-\-format\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-periods\fR] [\fB\-\-only\-if\-alerts\fR] [\fB\-e\fR|\fB\-\-engine\fR] [\fB\-v\fR|\fB\-\-voice\-name\fR] [\fB\-g\fR|\fB\-\-gain\fR] [\fB\-\-api\-key\-file\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-w\fR|\fB\-\-wait\fR] [\fB\-l\fR|\fB\-\-to\-links\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fINODE\fR> <\fILOCATION\fR> 
 .SH DESCRIPTION
 Announce the weather on an AllStar node.
 .PP
-Speaks a report and plays it on the node with `rpt localplay`, running `sudo \-u asterisk asterisk`, which must not ask for a password.
+Speaks a report and plays it on the node with `rpt localplay`, or with `rpt playback` to send it to linked nodes too.  It runs `sudo \-u asterisk asterisk`, which must not ask for a password.
 .SH OPTIONS
 .TP
 \fB\-r\fR, \fB\-\-report\fR \fI<REPORT>\fR [default: metar]
@@ -109,6 +109,9 @@ sln16: Raw 16\-bit signed linear at 16 kHz, for Asterisk to convert as each chan
 .TP
 \fB\-w\fR, \fB\-\-wait\fR \fI<WAIT>\fR [default: 60]
 Seconds a busy node gets to open the audio file before it is deleted
+.TP
+\fB\-l\fR, \fB\-\-to\-links\fR
+Send it to linked nodes too, not only the node\*(Aqs own transmitter
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help (see a summary with \*(Aq\-h\*(Aq)

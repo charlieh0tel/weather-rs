@@ -29,8 +29,9 @@ enum Engine {
 
 /// Announce the weather on an AllStar node.
 ///
-/// Speaks a report and plays it on the node with `rpt localplay`, running
-/// `sudo -u asterisk asterisk`, which must not ask for a password.
+/// Speaks a report and plays it on the node with `rpt localplay`, or with `rpt playback` to
+/// send it to linked nodes too.  It runs `sudo -u asterisk asterisk`, which must not ask for a
+/// password.
 #[derive(Parser, Debug)]
 #[command(name = "allstar-weather", version, mut_arg("format", |arg| arg.default_value("brief")))]
 struct Cli {
@@ -64,6 +65,10 @@ struct Cli {
     /// Seconds a busy node gets to open the audio file before it is deleted
     #[arg(short, long, default_value_t = 60)]
     wait: u64,
+
+    /// Send it to linked nodes too, not only the node's own transmitter
+    #[arg(short = 'l', long)]
+    to_links: bool,
 }
 
 fn tts(cli: &Cli) -> Result<Box<dyn TtsBackend>, Box<dyn Error>> {
@@ -103,9 +108,14 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     file.write_all(&audio)?;
     fs::set_permissions(file.path(), Permissions::from_mode(0o644))?;
 
-    // localplay takes the file name without its extension.
+    // Both commands take the file name without its extension.
     let sound = file.path().with_extension("");
-    let command = format!("rpt localplay {} {}", cli.node, sound.display());
+    let play = if cli.to_links {
+        "playback"
+    } else {
+        "localplay"
+    };
+    let command = format!("rpt {play} {} {}", cli.node, sound.display());
     let status = Command::new("sudo")
         .args(["-u", "asterisk", "asterisk", "-x", &command])
         .status()?;
@@ -159,6 +169,7 @@ mod tests {
         assert_eq!(cli.engine, Engine::Google);
         assert!(matches!(cli.audio_format, AudioFormat::Sln16));
         assert_eq!(cli.wait, 60);
+        assert!(!cli.to_links);
     }
 
     #[test]
@@ -176,6 +187,7 @@ mod tests {
             "ulaw",
             "-w",
             "5",
+            "-l",
             "65314",
             "KSJC",
         ])
@@ -193,12 +205,14 @@ mod tests {
             "ulaw",
             "--wait",
             "5",
+            "--to-links",
             "65314",
             "KSJC",
         ])
         .unwrap();
         assert_eq!(format!("{short:?}"), format!("{long:?}"));
         assert_eq!(long.gain, Some(-3.0));
+        assert!(long.to_links);
     }
 
     #[test]

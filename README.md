@@ -120,9 +120,11 @@ allstar-weather -r forecast 65314 KSJC
 allstar-weather -e espeak -a ulaw 65314 KSJC
 ```
 
-`allstar-weather NODE LOCATION` speaks a report and plays it on the node with
-`rpt localplay`, by running `sudo -u asterisk asterisk`, which must not ask for
-a password.  Besides the report options:
+`allstar-weather NODE LOCATION` speaks a report and plays it on the node's own
+transmitter with `rpt localplay`.  With `--to-links`, it uses `rpt playback`
+instead, which also sends it to every node linked to this one.  It runs
+`sudo -u asterisk asterisk`, which must not ask for a password.  Besides the
+report options:
 
 | Option | Meaning |
 |---|---|
@@ -133,6 +135,7 @@ a password.  Besides the report options:
 | `--api-key-file` | The file holding the Google API key (see below) |
 | `-a`, `--audio-format` | Format to play (default `sln16`; see below) |
 | `-w`, `--wait` | Seconds the node gets to open the file before it is deleted (default 60) |
+| `-l`, `--to-links` | Send it to linked nodes too |
 
 It runs well from cron.  For example, the METAR every two hours from 9 am to 5
 pm, the forecast at 6:35 am, and any alerts every 15 minutes:
