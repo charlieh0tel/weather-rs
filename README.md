@@ -131,14 +131,17 @@ kHz channels; ASL3 doesn't load it by default, so add this to
 load => codec_resample.so
 ```
 
-`allstar-weather NODE ICAO` speaks the weather at an airport and plays it on
-a node with `rpt localplay`.  It uses Google's `en-US-Chirp3-HD-Leda` voice
-by default; `-h` lists options to change the engine, voice, gain, format and
-style.  It runs well from cron, for example every two hours from 9 am to 5
-pm:
+`allstar-weather NODE LOCATION` speaks a report and plays it on a node with
+`rpt localplay`.  `-r` chooses the report as for `speak-weather`: the METAR
+for an airport by default, or the forecast or alerts for a place.  It uses
+Google's `en-US-Chirp3-HD-Leda` voice by default; `-h` lists options to
+change the engine, voice, gain, format and style.  It runs well from cron,
+for example the METAR every two hours from 9 am to 5 pm, and the forecast at
+6:35 am:
 
 ```
 5 9-17/2 * * * allstar-weather 65314 KSJC
+35 6 * * * allstar-weather -r forecast 65314 KSJC
 ```
 
 It needs to run `sudo -u asterisk asterisk` without a password, and the user

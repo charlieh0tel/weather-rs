@@ -1,11 +1,12 @@
 #!/bin/bash
 #
-# Announces the current weather at an airport on an AllStar node.
+# Announces the weather on an AllStar node.
 #
-# Usage: allstar-weather [options] NODE ICAO
+# Usage: allstar-weather [options] NODE LOCATION
 #
 # Suitable for cron, for example every two hours from 9 am to 5 pm:
 #   5 9-17/2 * * * allstar-weather 65314 KSJC
+#   35 6 * * * allstar-weather -r forecast 65314 KSJC
 
 set -o errexit
 set -o nounset
@@ -17,14 +18,18 @@ audio_file=""
 
 usage() {
   cat <<EOF
-Usage: ${0##*/} [options] NODE ICAO
+Usage: ${0##*/} [options] NODE LOCATION
+
+LOCATION is an ICAO airport for metar, or for forecast and alerts any place
+speak-weather accepts.
 
 Options:
+  -r REPORT  metar (default), forecast or alerts
   -e ENGINE  google (default) or espeak
   -v VOICE   Google voice name (default: en-US-Chirp3-HD-Leda)
   -g GAIN    Google volume gain in dB (default: 6)
   -f FORMAT  Audio format (default: sln16, which needs codec_resample)
-  -s STYLE   Announcement style (default: brief)
+  -s STYLE   metar announcement style (default: brief)
   -h         Show this help
 EOF
 }
@@ -36,6 +41,7 @@ cleanup() {
 }
 
 main() {
+  local report="metar"
   local engine="google"
   local voice="en-US-Chirp3-HD-Leda"
   local gain="6"
@@ -43,8 +49,9 @@ main() {
   local style="brief"
 
   local opt
-  while getopts "e:v:g:f:s:h" opt; do
+  while getopts "r:e:v:g:f:s:h" opt; do
     case "${opt}" in
+      r) report="${OPTARG}" ;;
       e) engine="${OPTARG}" ;;
       v) voice="${OPTARG}" ;;
       g) gain="${OPTARG}" ;;
@@ -66,7 +73,7 @@ main() {
     exit 2
   fi
   local -r node="$1"
-  local -r icao="$2"
+  local -r location="$2"
 
   local -a engine_args=()
   case "${engine}" in
@@ -84,8 +91,8 @@ main() {
 
   audio_file="$(mktemp "/tmp/tmpXXXXXXXXXX.${format}")"
 
-  speak-weather "${engine}" "${engine_args[@]}" -f "${style}" -a "${format}" \
-    -o "${audio_file}" "${icao}"
+  speak-weather "${engine}" "${engine_args[@]}" -r "${report}" -f "${style}" \
+    -a "${format}" -o "${audio_file}" "${location}"
 
   chmod 0644 "${audio_file}"
 
