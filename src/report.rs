@@ -61,7 +61,7 @@ pub fn announcement(args: &ReportArgs) -> Result<Option<String>> {
             "--only-if-alerts is only for --report alerts".to_string(),
         ));
     }
-    println!("Fetching weather for {}...\n", args.location);
+    eprintln!("Fetching weather for {}...\n", args.location);
 
     if args.report == Report::Metar {
         let metar = fetch_weather_data(&args.location)?;

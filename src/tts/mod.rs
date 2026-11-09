@@ -170,7 +170,7 @@ impl TtsPlayer {
         std::fs::write(&file_path, audio_data)
             .map_err(|e| TtsError::FileError(format!("Failed to write {}: {}", file_path, e)))?;
 
-        println!("Audio saved to: {}", file_path);
+        eprintln!("Audio saved to: {}", file_path);
         Ok(())
     }
 
@@ -231,9 +231,9 @@ pub fn execute_tts_output<T: TtsBackend>(
     audio_format: &AudioFormat,
 ) -> Result<(), TtsError> {
     if output_path.is_some() {
-        println!("Generating audio file...");
+        eprintln!("Generating audio file...");
     } else {
-        println!("Speaking weather...");
+        eprintln!("Speaking weather...");
     }
 
     if let Some(path) = output_path {

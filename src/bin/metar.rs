@@ -12,7 +12,7 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    println!("Fetching weather for {}...\n", args.icao.to_uppercase());
+    eprintln!("Fetching weather for {}...\n", args.icao.to_uppercase());
 
     match fetch_weather_data(&args.icao) {
         Ok(metar) => display_weather(&metar),

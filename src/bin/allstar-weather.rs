@@ -94,10 +94,10 @@ fn tts(cli: &Cli) -> Result<Box<dyn TtsBackend>, Box<dyn Error>> {
 fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     let tts = tts(&cli)?;
     let Some(text) = announcement(&cli.report)? else {
-        println!("{NOTHING_TO_ANNOUNCE}");
+        eprintln!("{NOTHING_TO_ANNOUNCE}");
         return Ok(());
     };
-    println!("Announcement text: {text}\n");
+    eprintln!("Announcement text: {text}\n");
     let audio = tts.synthesize(&text, &cli.audio_format)?;
 
     // Asterisk runs as another user, so the file goes where it can read it.

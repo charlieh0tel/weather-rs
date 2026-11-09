@@ -113,10 +113,10 @@ fn create_espeak_voice(
 
 fn handle_espeak(args: EspeakArgs) -> Result<(), Box<dyn std::error::Error>> {
     let Some(announcement) = announcement(&args.common.report)? else {
-        println!("{NOTHING_TO_ANNOUNCE}");
+        eprintln!("{NOTHING_TO_ANNOUNCE}");
         return Ok(());
     };
-    println!("Announcement text: {}\n", announcement);
+    eprintln!("Announcement text: {}\n", announcement);
 
     let voice = create_espeak_voice(args.voice, args.speed, args.pitch, args.gap);
     let tts = EspeakTts::new(voice)?;
@@ -134,10 +134,10 @@ fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
     let api_key = google_tts::api_key(args.api_key_file.as_deref())?;
 
     let Some(announcement) = announcement(&args.common.report)? else {
-        println!("{NOTHING_TO_ANNOUNCE}");
+        eprintln!("{NOTHING_TO_ANNOUNCE}");
         return Ok(());
     };
-    println!("Announcement text: {}\n", announcement);
+    eprintln!("Announcement text: {}\n", announcement);
 
     let tts = match args.voice_name {
         Some(name) => GoogleTts::with_voice_name(api_key, &name)?,
@@ -156,13 +156,13 @@ fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
 
 fn handle_text(args: TextArgs) -> Result<(), Box<dyn std::error::Error>> {
     let Some(announcement) = announcement(&args.common.report)? else {
-        println!("{NOTHING_TO_ANNOUNCE}");
+        eprintln!("{NOTHING_TO_ANNOUNCE}");
         return Ok(());
     };
 
     if let Some(output_path) = args.common.output {
         std::fs::write(&output_path, &announcement)?;
-        println!("Text saved to: {}", output_path);
+        eprintln!("Text saved to: {}", output_path);
     } else {
         println!("{}", announcement.trim());
     }
