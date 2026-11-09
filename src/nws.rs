@@ -254,6 +254,9 @@ impl NwsClient {
             .as_deref()
             .ok_or_else(|| WeatherError::NoForecast(point.grid()))?;
         let forecast: Feature<Forecast> = self.get(url, &[])?;
+        if forecast.properties.periods.is_empty() {
+            return Err(WeatherError::NoForecast(point.grid()));
+        }
         Ok(forecast.properties.periods)
     }
 

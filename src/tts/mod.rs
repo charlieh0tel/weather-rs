@@ -7,7 +7,10 @@ pub mod audio_conversion;
 pub mod espeak;
 pub mod google_tts;
 
-pub use announcements::{AnnouncementFormat, TemperatureUnit, generate_weather_announcement};
+pub use announcements::{
+    AnnouncementFormat, TemperatureUnit, alerts_announcement, forecast_announcement,
+    generate_weather_announcement,
+};
 
 #[derive(Debug, Clone, clap::ValueEnum)]
 pub enum Voice {

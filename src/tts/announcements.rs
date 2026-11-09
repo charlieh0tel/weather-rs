@@ -1,7 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    MetarData, WeatherGroup, celsius_to_fahrenheit, expand_station_name, parse_weather_groups,
+    MetarData, WeatherGroup, celsius_to_fahrenheit, expand_station_name,
+    nws::{Alert, ForecastPeriod},
+    parse_weather_groups,
 };
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -204,6 +206,31 @@ fn announcement_at(
             announcement
         }
     }
+}
+
+pub fn alerts_announcement(alerts: &[Alert]) -> String {
+    if alerts.is_empty() {
+        return "No weather alerts in effect...".to_string();
+    }
+    let headlines: Vec<&str> = alerts
+        .iter()
+        .map(|alert| alert.headline.as_deref().unwrap_or(&alert.event))
+        .collect();
+    format!("Weather alerts... {}...", headlines.join("... "))
+}
+
+pub fn forecast_announcement(periods: &[ForecastPeriod]) -> String {
+    let spoken: Vec<String> = periods
+        .iter()
+        .map(|period| {
+            let forecast = period
+                .detailed_forecast
+                .trim_end_matches('.')
+                .replace(" mph", " miles per hour");
+            format!("{}... {forecast}", period.name)
+        })
+        .collect();
+    format!("Forecast... {}...", spoken.join("... "))
 }
 
 #[cfg(test)]
@@ -499,6 +526,49 @@ mod tests {
             assert!(announcement.contains(expected), "{announcement}");
             assert!(!announcement.contains("-40"), "{announcement}");
         }
+    }
+
+    fn period(name: &str, detailed_forecast: &str) -> ForecastPeriod {
+        ForecastPeriod {
+            name: name.to_string(),
+            detailed_forecast: detailed_forecast.to_string(),
+        }
+    }
+
+    #[test]
+    fn forecast_announcements() {
+        let periods = [
+            period(
+                "This Afternoon",
+                "Sunny. High near 73. Northwest wind around 7 mph.",
+            ),
+            period("Tonight", "Mostly clear, with a low around 52."),
+        ];
+
+        assert_eq!(
+            forecast_announcement(&periods),
+            "Forecast... This Afternoon... Sunny. High near 73. Northwest wind around 7 miles per hour... Tonight... Mostly clear, with a low around 52..."
+        );
+    }
+
+    #[test]
+    fn alert_announcements_fall_back_to_the_event() {
+        let alerts = [
+            Alert {
+                event: "Wind Advisory".to_string(),
+                headline: Some("Wind Advisory issued November 8 at 3:02PM PST".to_string()),
+            },
+            Alert {
+                event: "Dense Fog Advisory".to_string(),
+                headline: None,
+            },
+        ];
+
+        assert_eq!(
+            alerts_announcement(&alerts),
+            "Weather alerts... Wind Advisory issued November 8 at 3:02PM PST... Dense Fog Advisory..."
+        );
+        assert_eq!(alerts_announcement(&[]), "No weather alerts in effect...");
     }
 
     #[test]

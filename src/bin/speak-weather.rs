@@ -5,10 +5,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use weather::{
     fetch_weather_data,
+    nws::{Location, NwsClient},
     tts::{
-        AnnouncementFormat, AudioFormat, TemperatureUnit, Voice,
+        AnnouncementFormat, AudioFormat, TemperatureUnit, Voice, alerts_announcement,
         espeak::{EspeakTts, EspeakVoice},
-        execute_tts_output, generate_weather_announcement,
+        execute_tts_output, forecast_announcement, generate_weather_announcement,
         google_tts::GoogleTts,
     },
 };
@@ -30,22 +31,67 @@ enum Commands {
     Text(TextArgs),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum Report {
+    /// Current conditions at an airport, from aviationweather.gov
+    Metar,
+    /// The National Weather Service forecast (US only)
+    Forecast,
+    /// Active National Weather Service alerts (US only)
+    Alerts,
+}
+
 #[derive(Args, Debug)]
 struct CommonArgs {
-    /// ICAO airport identifier (e.g., KJFK, EGLL, KSFO)
-    icao: String,
+    /// ICAO airport for metar (e.g., KSJC); station, lat,lon or US address for forecast and
+    /// alerts
+    location: String,
 
-    /// Output format for announcement
+    /// What to announce
+    #[arg(short, long, value_enum, default_value = "metar")]
+    report: Report,
+
+    /// Output format for the metar announcement
     #[arg(short, long, value_enum, default_value = "speech")]
     format: AnnouncementFormat,
 
-    /// Temperature unit (the detailed format always gives both)
+    /// Temperature unit for metar (the detailed format always gives both)
     #[arg(short, long, value_enum, default_value = "fahrenheit")]
     temp_unit: TemperatureUnit,
+
+    /// Number of half-day forecast periods [default: 2]
+    #[arg(long, value_parser = clap::value_parser!(u8).range(1..))]
+    periods: Option<u8>,
 
     /// Save output to file instead of speaking/printing
     #[arg(short, long)]
     output: Option<String>,
+}
+
+fn announcement(common: &CommonArgs) -> Result<String, Box<dyn std::error::Error>> {
+    if common.periods.is_some() && common.report != Report::Forecast {
+        return Err("--periods is only for --report forecast".into());
+    }
+    println!("Fetching weather for {}...\n", common.location);
+
+    if common.report == Report::Metar {
+        let metar = fetch_weather_data(&common.location)?;
+        return Ok(generate_weather_announcement(
+            &metar,
+            &common.format,
+            common.temp_unit,
+        ));
+    }
+
+    let location: Location = common.location.parse()?;
+    let nws = NwsClient::new()?;
+    let coordinates = nws.locate(&location)?.coordinates;
+    if common.report == Report::Alerts {
+        return Ok(alerts_announcement(&nws.alerts(coordinates)?));
+    }
+    let periods = nws.forecast(&nws.point(coordinates)?)?;
+    let count = periods.len().min(common.periods.unwrap_or(2).into());
+    Ok(forecast_announcement(&periods[..count]))
 }
 
 #[derive(Args, Debug)]
@@ -118,14 +164,7 @@ fn create_espeak_voice(
 }
 
 fn handle_espeak(args: EspeakArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!(
-        "Fetching weather for {}...\n",
-        args.common.icao.to_uppercase()
-    );
-
-    let metar = fetch_weather_data(&args.common.icao)?;
-    let announcement =
-        generate_weather_announcement(&metar, &args.common.format, args.common.temp_unit);
+    let announcement = announcement(&args.common)?;
     println!("Announcement text: {}\n", announcement);
 
     let voice = create_espeak_voice(args.voice, args.speed, args.pitch, args.gap);
@@ -192,14 +231,7 @@ fn google_api_key() -> Result<String, String> {
 fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
     let api_key = google_api_key()?;
 
-    println!(
-        "Fetching weather for {}...\n",
-        args.common.icao.to_uppercase()
-    );
-
-    let metar = fetch_weather_data(&args.common.icao)?;
-    let announcement =
-        generate_weather_announcement(&metar, &args.common.format, args.common.temp_unit);
+    let announcement = announcement(&args.common)?;
     println!("Announcement text: {}\n", announcement);
 
     let tts = match args.voice_name {
@@ -218,14 +250,7 @@ fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn handle_text(args: TextArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!(
-        "Fetching weather for {}...\n",
-        args.common.icao.to_uppercase()
-    );
-
-    let metar = fetch_weather_data(&args.common.icao)?;
-    let announcement =
-        generate_weather_announcement(&metar, &args.common.format, args.common.temp_unit);
+    let announcement = announcement(&args.common)?;
 
     if let Some(output_path) = args.common.output {
         std::fs::write(&output_path, &announcement)?;
@@ -306,6 +331,47 @@ mod tests {
     fn temperature_unit_can_be_chosen() {
         Cli::try_parse_from(["speak-weather", "text", "-t", "celsius", "KSJC"]).unwrap();
         assert!(Cli::try_parse_from(["speak-weather", "text", "-t", "kelvin", "KSJC"]).is_err());
+    }
+
+    fn parse_text(args: &[&str]) -> Result<CommonArgs, clap::Error> {
+        let args = ["speak-weather", "text"].iter().chain(args);
+        match Cli::try_parse_from(args)?.command {
+            Commands::Text(args) => Ok(args.common),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn one_report_is_chosen_and_metar_is_the_default() {
+        assert_eq!(parse_text(&["KSJC"]).unwrap().report, Report::Metar);
+
+        let common = parse_text(&[
+            "-r",
+            "forecast",
+            "--periods",
+            "4",
+            "200 E Santa Clara St, San Jose, CA",
+        ])
+        .unwrap();
+        assert_eq!(common.report, Report::Forecast);
+        assert_eq!(common.periods, Some(4));
+        assert_eq!(common.location, "200 E Santa Clara St, San Jose, CA");
+
+        assert!(parse_text(&["-r", "taf", "KSJC"]).is_err());
+        assert!(parse_text(&["-r", "forecast", "--periods", "0", "KSJC"]).is_err());
+    }
+
+    #[test]
+    fn periods_are_only_for_the_forecast() {
+        for report in ["metar", "alerts"] {
+            let common = parse_text(&["-r", report, "--periods", "3", "KSJC"]).unwrap();
+            assert!(
+                announcement(&common)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("--periods")
+            );
+        }
     }
 
     #[test]
