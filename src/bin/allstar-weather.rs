@@ -116,8 +116,10 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         "localplay"
     };
     let command = format!("rpt {play} {} {}", cli.node, sound.display());
+    // From a directory the asterisk user can read, or Asterisk warns about it.
     let status = Command::new("sudo")
         .args(["-u", "asterisk", "asterisk", "-x", &command])
+        .current_dir("/")
         .status()?;
     if !status.success() {
         return Err(format!("Asterisk failed to run '{command}': {status}").into());
