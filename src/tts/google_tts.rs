@@ -13,14 +13,14 @@ const MAX_REQUEST_BYTES: usize = 5000;
 
 pub const API_KEY_VAR: &str = "GOOGLE_CLOUD_API_KEY";
 
-/// `$XDG_CONFIG_HOME/speak-weather/google-api-key`, where the config directory defaults to
+/// `$XDG_CONFIG_HOME/weather-rs/google-api-key`, where the config directory defaults to
 /// `~/.config`.
 fn api_key_path(config_home: Option<OsString>, home: Option<OsString>) -> Option<PathBuf> {
     let config = match config_home.filter(|dir| !dir.is_empty()) {
         Some(dir) => PathBuf::from(dir),
         None => PathBuf::from(home?).join(".config"),
     };
-    Some(config.join("speak-weather").join("google-api-key"))
+    Some(config.join("weather-rs").join("google-api-key"))
 }
 
 fn read_api_key(path: &Path) -> Result<String, TtsError> {
@@ -395,7 +395,7 @@ mod tests {
         let key_file = |config_home: Option<&str>, home: Option<&str>| {
             api_key_path(config_home.map(Into::into), home.map(Into::into))
         };
-        let expected = |dir: &str| Some(Path::new(dir).join("speak-weather/google-api-key"));
+        let expected = |dir: &str| Some(Path::new(dir).join("weather-rs/google-api-key"));
 
         assert_eq!(key_file(Some("/xdg"), Some("/home/u")), expected("/xdg"));
         assert_eq!(key_file(None, Some("/home/u")), expected("/home/u/.config"));
