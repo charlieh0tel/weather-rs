@@ -47,8 +47,8 @@ enum Command {
 
 #[derive(Args, Debug)]
 struct PlaceArgs {
-    /// A station (KSJC), latitude,longitude, US street address or place name ("Mountain View,
-    /// CA"); quotes are optional
+    /// A station (KSJC), latitude,longitude, NWS grid square (MTR 99,82) or zone (CAZ513), US
+    /// street address or place name ("Mountain View, CA"); quotes are optional
     #[arg(value_name = "PLACE", required = true, num_args = 1.., allow_negative_numbers = true)]
     place: Vec<String>,
 }

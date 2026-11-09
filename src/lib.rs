@@ -30,6 +30,7 @@ pub enum WeatherError {
     AddressNotFound(String),
     PlaceNotFound(String),
     UnknownStation(String),
+    UnknownArea(String),
     NoMetarStation(String),
     NoForecast(String),
 }
@@ -79,6 +80,10 @@ impl fmt::Display for WeatherError {
             WeatherError::NoMetarStation(place) => {
                 write!(f, "No METAR station found near {place}")
             }
+            WeatherError::UnknownArea(area) => write!(
+                f,
+                "{area} is not a National Weather Service grid square or zone"
+            ),
             WeatherError::UnknownStation(id) => write!(
                 f,
                 "{id} is not a National Weather Service station; they are only in the US"

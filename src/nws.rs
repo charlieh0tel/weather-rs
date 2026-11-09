@@ -42,14 +42,46 @@ impl fmt::Display for Coordinates {
     }
 }
 
-/// A place given as an ICAO station, `latitude,longitude`, a US street address (starting with a
-/// house number) or any other name, such as "Mountain View, CA".
+/// A place given as an ICAO station, `latitude,longitude`, an NWS grid square (`MTR 99,82`) or
+/// zone (`CAZ513`), a US street address (starting with a house number) or any other name, such as
+/// "Mountain View, CA".
 #[derive(Debug, Clone, PartialEq)]
 pub enum Location {
     Station(String),
     Coordinates(Coordinates),
+    Grid { office: String, x: u32, y: u32 },
+    Zone(String),
     Address(String),
     Name(String),
+}
+
+/// A grid square, such as `MTR 99,82` or `MTR/99,82`: a forecast office and the square's x and y.
+fn parse_grid(s: &str) -> Option<Location> {
+    let (office, xy) = s.split_once([' ', '/'])?;
+    let (x, y) = xy.trim().split_once(',')?;
+    let all_digits = |part: &str| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit());
+    if office.len() != 3 || !office.chars().all(|c| c.is_ascii_alphabetic()) {
+        return None;
+    }
+    if !all_digits(x.trim()) || !all_digits(y.trim()) {
+        return None;
+    }
+    Some(Location::Grid {
+        office: office.to_uppercase(),
+        x: x.trim().parse().ok()?,
+        y: y.trim().parse().ok()?,
+    })
+}
+
+/// A forecast zone, such as `CAZ513`, or a county zone, such as `CAC085`.
+fn parse_zone(s: &str) -> Option<Location> {
+    let s = s.to_uppercase();
+    let bytes = s.as_bytes();
+    let is_zone = bytes.len() == 6
+        && bytes[..2].iter().all(u8::is_ascii_alphabetic)
+        && matches!(bytes[2], b'Z' | b'C')
+        && bytes[3..].iter().all(u8::is_ascii_digit);
+    is_zone.then_some(Location::Zone(s))
 }
 
 impl fmt::Display for Location {
@@ -57,7 +89,8 @@ impl fmt::Display for Location {
         match self {
             Location::Station(id) => write!(f, "{id}"),
             Location::Coordinates(coordinates) => write!(f, "{coordinates}"),
-            Location::Address(text) | Location::Name(text) => write!(f, "{text}"),
+            Location::Grid { office, x, y } => write!(f, "{office} {x},{y}"),
+            Location::Zone(id) | Location::Address(id) | Location::Name(id) => write!(f, "{id}"),
         }
     }
 }
@@ -81,6 +114,12 @@ impl FromStr for Location {
             && let (Ok(lat), Ok(lon)) = (lat.trim().parse(), lon.trim().parse())
         {
             return Coordinates::new(lat, lon).map(Location::Coordinates);
+        }
+        if let Some(grid) = parse_grid(s) {
+            return Ok(grid);
+        }
+        if let Some(zone) = parse_zone(s) {
+            return Ok(zone);
         }
         if validate_icao(s).is_ok() {
             Ok(Location::Station(s.to_uppercase()))
@@ -113,6 +152,52 @@ impl<P> FeatureCollection<P> {
     fn into_properties(self) -> Vec<P> {
         self.features.into_iter().map(|f| f.properties).collect()
     }
+}
+
+/// An outline, as GeoJSON gives it: longitude, then latitude.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", content = "coordinates")]
+enum Area {
+    Polygon(Vec<Vec<(f64, f64)>>),
+    MultiPolygon(Vec<Vec<Vec<(f64, f64)>>>),
+}
+
+impl Area {
+    /// The mean of the outer rings' corners, which is near enough the center of a grid square or
+    /// zone to find its forecast and alerts.
+    fn center(&self) -> Result<Coordinates> {
+        let outer_rings: Vec<&Vec<(f64, f64)>> = match self {
+            Area::Polygon(rings) => rings.iter().take(1).collect(),
+            Area::MultiPolygon(polygons) => polygons.iter().filter_map(|p| p.first()).collect(),
+        };
+        // A ring ends where it starts, so its last corner is left out.
+        let corners: Vec<(f64, f64)> = outer_rings
+            .into_iter()
+            .flat_map(|ring| ring.iter().take(ring.len().saturating_sub(1)).copied())
+            .collect();
+        if corners.is_empty() {
+            return Err(WeatherError::InvalidJson(
+                "an outline with no corners".to_string(),
+            ));
+        }
+        let count = corners.len() as f64;
+        let (lon, lat) = corners
+            .iter()
+            .fold((0.0, 0.0), |(lon, lat), (x, y)| (lon + x, lat + y));
+        Coordinates::new(lat / count, lon / count)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct AreaFeature {
+    geometry: Area,
+    properties: AreaProperties,
+}
+
+#[derive(Debug, Deserialize)]
+struct AreaProperties {
+    #[serde(default)]
+    name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -260,9 +345,35 @@ impl NwsClient {
                     e => e,
                 })?
                 .into_place(),
+            Location::Grid { office, x, y } => {
+                let url = format!("{BASE_URL}/gridpoints/{office}/{x},{y}/forecast");
+                self.locate_area(&url, location)
+            }
+            Location::Zone(id) => {
+                let kind = if id.as_bytes()[2] == b'C' {
+                    "county"
+                } else {
+                    "forecast"
+                };
+                self.locate_area(&format!("{BASE_URL}/zones/{kind}/{id}"), location)
+            }
             Location::Address(address) => geocode::locate_address(&self.http, address),
             Location::Name(name) => geocode::locate_name(&self.http, name),
         }
+    }
+
+    /// The center of a grid square or zone, from its outline.
+    fn locate_area(&self, url: &str, location: &Location) -> Result<Place> {
+        let area: AreaFeature = self.get(url, &[]).map_err(|e| match e {
+            WeatherError::HttpStatus { status, .. } if status == reqwest::StatusCode::NOT_FOUND => {
+                WeatherError::UnknownArea(location.to_string())
+            }
+            e => e,
+        })?;
+        Ok(Place {
+            coordinates: area.geometry.center()?,
+            name: Some(area.properties.name.unwrap_or_else(|| location.to_string())),
+        })
     }
 
     pub fn point(&self, coordinates: Coordinates) -> Result<Point> {
@@ -332,12 +443,63 @@ mod tests {
                 Location::Name("Mountain View, CA".to_string()),
             ),
             ("94043", Location::Name("94043".to_string())),
+            (
+                "MTR 99,82",
+                Location::Grid {
+                    office: "MTR".to_string(),
+                    x: 99,
+                    y: 82,
+                },
+            ),
+            (
+                "mtr/99, 82",
+                Location::Grid {
+                    office: "MTR".to_string(),
+                    x: 99,
+                    y: 82,
+                },
+            ),
+            ("CAZ513", Location::Zone("CAZ513".to_string())),
+            ("cac085", Location::Zone("CAC085".to_string())),
+            ("CAX513", Location::Name("CAX513".to_string())),
+            ("MTRX 99,82", Location::Name("MTRX 99,82".to_string())),
             ("Route 66", Location::Name("Route 66".to_string())),
         ];
 
         for (input, expected) in cases {
             assert_eq!(input.parse::<Location>().unwrap(), expected, "{input:?}");
         }
+    }
+
+    #[test]
+    fn finds_the_center_of_a_grid_square_or_zone() {
+        let grid: AreaFeature = parse_json(include_str!("testdata/forecast.json")).unwrap();
+        assert_eq!(grid.properties.name, None);
+        let center = grid.geometry.center().unwrap();
+        assert!((37.3369..37.3632).contains(&center.lat), "{center}");
+        assert!((-121.9452..-121.9122).contains(&center.lon), "{center}");
+
+        let zone: AreaFeature = parse_json(include_str!("testdata/zone.json")).unwrap();
+        assert_eq!(
+            zone.properties.name.as_deref(),
+            Some("Santa Clara Valley Including San Jose")
+        );
+        let center = zone.geometry.center().unwrap();
+        assert!((36.894..37.448).contains(&center.lat), "{center}");
+        assert!((-122.097..-121.447).contains(&center.lon), "{center}");
+
+        let square = |x: f64| {
+            vec![vec![
+                (x, 0.0),
+                (x + 2.0, 0.0),
+                (x + 2.0, 2.0),
+                (x, 2.0),
+                (x, 0.0),
+            ]]
+        };
+        let two = Area::MultiPolygon(vec![square(0.0), square(10.0)]);
+        assert_eq!(two.center().unwrap().to_string(), "1,6");
+        assert!(Area::Polygon(vec![]).center().is_err());
     }
 
     #[test]
