@@ -12,6 +12,7 @@ The `weather` package installs these commands:
 - `speak-weather` turns it into speech with eSpeak NG or Google Cloud
   Text-to-Speech, or prints the text for another TTS engine.
 - `nws-lookup` finds the National Weather Service identifiers for a place.
+- `allstar-weather` announces a report on an AllStar node.
 
 They are named so as not to conflict with Debian's `weather-util`, which owns
 `/usr/bin/weather`.
