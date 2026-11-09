@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fs::{self, Permissions};
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
@@ -51,6 +52,11 @@ struct Cli {
     #[arg(short, long, allow_negative_numbers = true)]
     gain: Option<f64>,
 
+    /// File holding the Google API key [default: $GOOGLE_CLOUD_API_KEY, else
+    /// ~/.config/speak-weather/google-api-key]
+    #[arg(long, value_name = "FILE")]
+    api_key_file: Option<PathBuf>,
+
     /// Audio format to play (sln16 needs Asterisk's codec_resample module)
     #[arg(short, long, value_enum, default_value = "sln16")]
     audio_format: AudioFormat,
@@ -64,13 +70,16 @@ fn tts(cli: &Cli) -> Result<Box<dyn TtsBackend>, Box<dyn Error>> {
     match cli.engine {
         Engine::Google => {
             let voice_name = cli.voice_name.as_deref().unwrap_or(DEFAULT_VOICE_NAME);
-            let tts = GoogleTts::with_voice_name(google_tts::api_key()?, voice_name)?
+            let api_key = google_tts::api_key(cli.api_key_file.as_deref())?;
+            let tts = GoogleTts::with_voice_name(api_key, voice_name)?
                 .with_gain(cli.gain.unwrap_or(DEFAULT_GAIN_DB))?;
             Ok(Box::new(tts))
         }
         Engine::Espeak => {
-            if cli.voice_name.is_some() || cli.gain.is_some() {
-                return Err("--voice-name and --gain are only for --engine google".into());
+            if cli.voice_name.is_some() || cli.gain.is_some() || cli.api_key_file.is_some() {
+                return Err(
+                    "--voice-name, --gain and --api-key-file are only for --engine google".into(),
+                );
             }
             Ok(Box::new(EspeakTts::new(EspeakVoice::from(Voice::Default))?))
         }
@@ -191,7 +200,11 @@ mod tests {
 
     #[test]
     fn google_options_are_refused_for_espeak() {
-        for flags in [["--gain", "3"], ["--voice-name", "en-US-Neural2-F"]] {
+        for flags in [
+            ["--gain", "3"],
+            ["--voice-name", "en-US-Neural2-F"],
+            ["--api-key-file", "key"],
+        ] {
             let args: Vec<&str> = ["-e", "espeak"]
                 .into_iter()
                 .chain(flags)

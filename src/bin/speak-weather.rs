@@ -1,4 +1,5 @@
 use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
 use weather::{
     report::{ReportArgs, announcement},
     tts::{
@@ -82,6 +83,11 @@ struct GoogleArgs {
     /// Volume relative to the voice's native level, in dB (-96 to 16)
     #[arg(long, default_value_t = 0.0, allow_negative_numbers = true)]
     gain: f64,
+
+    /// File holding the Google API key [default: $GOOGLE_CLOUD_API_KEY, else
+    /// ~/.config/speak-weather/google-api-key]
+    #[arg(long, value_name = "FILE")]
+    api_key_file: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -122,7 +128,7 @@ fn handle_espeak(args: EspeakArgs) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let api_key = google_tts::api_key()?;
+    let api_key = google_tts::api_key(args.api_key_file.as_deref())?;
 
     let announcement = announcement(&args.common.report)?;
     println!("Announcement text: {}\n", announcement);

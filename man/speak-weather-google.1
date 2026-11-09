@@ -4,7 +4,7 @@
 .SH NAME
 speak\-weather\-google \- Use Google Cloud TTS engine
 .SH SYNOPSIS
-\fBspeak\-weather google\fR [\fB\-r\fR|\fB\-\-report\fR] [\fB\-f\fR|\fB\-\-format\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-periods\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-v\fR|\fB\-\-voice\fR] [\fB\-\-voice\-name\fR] [\fB\-\-gain\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fILOCATION\fR> 
+\fBspeak\-weather google\fR [\fB\-r\fR|\fB\-\-report\fR] [\fB\-f\fR|\fB\-\-format\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-periods\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-v\fR|\fB\-\-voice\fR] [\fB\-\-voice\-name\fR] [\fB\-\-gain\fR] [\fB\-\-api\-key\-file\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fILOCATION\fR> 
 .SH DESCRIPTION
 Use Google Cloud TTS engine
 .SH OPTIONS
@@ -107,6 +107,9 @@ Any Google voice by its full name, such as en\-US\-Chirp3\-HD\-Leda (overrides \
 .TP
 \fB\-\-gain\fR \fI<GAIN>\fR [default: 0]
 Volume relative to the voice\*(Aqs native level, in dB (\-96 to 16)
+.TP
+\fB\-\-api\-key\-file\fR \fI<FILE>\fR
+File holding the Google API key [default: $GOOGLE_CLOUD_API_KEY, else ~/.config/speak\-weather/google\-api\-key]
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help (see a summary with \*(Aq\-h\*(Aq)

@@ -4,7 +4,7 @@
 .SH NAME
 allstar\-weather \- Announce the weather on an AllStar node
 .SH SYNOPSIS
-\fBallstar\-weather\fR [\fB\-r\fR|\fB\-\-report\fR] [\fB\-f\fR|\fB\-\-format\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-periods\fR] [\fB\-e\fR|\fB\-\-engine\fR] [\fB\-v\fR|\fB\-\-voice\-name\fR] [\fB\-g\fR|\fB\-\-gain\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-w\fR|\fB\-\-wait\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fINODE\fR> <\fILOCATION\fR> 
+\fBallstar\-weather\fR [\fB\-r\fR|\fB\-\-report\fR] [\fB\-f\fR|\fB\-\-format\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-periods\fR] [\fB\-e\fR|\fB\-\-engine\fR] [\fB\-v\fR|\fB\-\-voice\-name\fR] [\fB\-g\fR|\fB\-\-gain\fR] [\fB\-\-api\-key\-file\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-w\fR|\fB\-\-wait\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fINODE\fR> <\fILOCATION\fR> 
 .SH DESCRIPTION
 Announce the weather on an AllStar node.
 .PP
@@ -77,6 +77,9 @@ Google voice name [default: en\-US\-Chirp3\-HD\-Leda]
 .TP
 \fB\-g\fR, \fB\-\-gain\fR \fI<GAIN>\fR
 Google volume gain in dB, \-96 to 16 [default: 6]
+.TP
+\fB\-\-api\-key\-file\fR \fI<FILE>\fR
+File holding the Google API key [default: $GOOGLE_CLOUD_API_KEY, else ~/.config/speak\-weather/google\-api\-key]
 .TP
 \fB\-a\fR, \fB\-\-audio\-format\fR \fI<AUDIO_FORMAT>\fR [default: sln16]
 Audio format to play (sln16 needs Asterisk\*(Aqs codec_resample module)

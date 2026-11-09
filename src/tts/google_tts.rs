@@ -23,7 +23,7 @@ fn api_key_path(config_home: Option<OsString>, home: Option<OsString>) -> Option
 fn read_api_key(path: &Path) -> Result<String, TtsError> {
     let contents = fs::read_to_string(path).map_err(|e| {
         TtsError::ApiKeyError(format!(
-            "No Google API key: set {API_KEY_VAR} or put the key in {} ({e})",
+            "Cannot read the Google API key from {}: {e}",
             path.display()
         ))
     })?;
@@ -46,8 +46,12 @@ fn read_api_key(path: &Path) -> Result<String, TtsError> {
     Ok(key.to_string())
 }
 
-/// The Google API key, from `GOOGLE_CLOUD_API_KEY` or else the key file.
-pub fn api_key() -> Result<String, TtsError> {
+/// The Google API key: from `file` if given, else `GOOGLE_CLOUD_API_KEY`, else the default key
+/// file.
+pub fn api_key(file: Option<&Path>) -> Result<String, TtsError> {
+    if let Some(file) = file {
+        return read_api_key(file);
+    }
     if let Ok(key) = std::env::var(API_KEY_VAR) {
         return Ok(key);
     }
@@ -61,6 +65,7 @@ pub fn api_key() -> Result<String, TtsError> {
         ))
     })?;
     read_api_key(&path)
+        .map_err(|e| TtsError::ApiKeyError(format!("{e}, and {API_KEY_VAR} is not set")))
 }
 
 #[derive(Debug, Clone)]
@@ -364,13 +369,14 @@ mod tests {
         let path = dir.path().join("google-api-key");
         let message = |path: &Path| read_api_key(path).unwrap_err().to_string();
 
-        assert!(message(&path).contains(API_KEY_VAR));
+        assert!(message(&path).contains("Cannot read"));
 
         fs::write(&path, "  \n").unwrap();
         assert!(message(&path).contains("empty"));
 
         fs::write(&path, "the-key\n").unwrap();
         assert_eq!(read_api_key(&path).unwrap(), "the-key");
+        assert_eq!(api_key(Some(&path)).unwrap(), "the-key");
     }
 
     #[test]
