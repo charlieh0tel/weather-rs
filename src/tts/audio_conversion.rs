@@ -26,6 +26,36 @@ pub fn wav_to_raw(wav_data: &[u8], format: &AudioFormat) -> Result<Vec<u8>, TtsE
     sox(wav_data, sox_type, format)
 }
 
+/// Joins WAVs that share a format into one.
+pub fn join_wavs(wavs: &[Vec<u8>]) -> Result<Vec<u8>, TtsError> {
+    let error =
+        |e: hound::Error| TtsError::AudioConversionError(format!("Failed to join WAVs: {e}"));
+
+    let readers = wavs
+        .iter()
+        .map(|wav| hound::WavReader::new(wav.as_slice()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(error)?;
+    let Some(spec) = readers.first().map(|reader| reader.spec()) else {
+        return Ok(Vec::new());
+    };
+    if readers.iter().any(|reader| reader.spec() != spec) {
+        return Err(TtsError::AudioConversionError(
+            "Cannot join WAVs in different formats".to_string(),
+        ));
+    }
+
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    let mut writer = hound::WavWriter::new(&mut cursor, spec).map_err(error)?;
+    for reader in readers {
+        for sample in reader.into_samples::<i16>() {
+            writer.write_sample(sample.map_err(error)?).map_err(error)?;
+        }
+    }
+    writer.finalize().map_err(error)?;
+    Ok(cursor.into_inner())
+}
+
 /// The samples of a WAV that is already 16-bit mono at `.sln16`'s rate, else `None`.
 fn sln16_samples(wav_data: &[u8]) -> Result<Option<Vec<u8>>, TtsError> {
     let read_error = |e| TtsError::AudioConversionError(format!("Failed to read WAV: {e}"));
@@ -114,6 +144,17 @@ mod tests {
     #[test]
     fn sln16_rejects_data_that_is_not_wav() {
         assert!(wav_to_raw(b"not a wav file", &AudioFormat::Sln16).is_err());
+    }
+
+    #[test]
+    fn wavs_are_joined_in_order() {
+        let joined = join_wavs(&[wav(16000, &[1, 2]), wav(16000, &[3])]).unwrap();
+        let reader = hound::WavReader::new(joined.as_slice()).unwrap();
+        assert_eq!(reader.spec().sample_rate, 16000);
+        let samples: Vec<i16> = reader.into_samples().map(Result::unwrap).collect();
+        assert_eq!(samples, [1, 2, 3]);
+
+        assert!(join_wavs(&[wav(16000, &[1]), wav(8000, &[2])]).is_err());
     }
 
     #[test]

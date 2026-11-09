@@ -1,4 +1,4 @@
-use crate::tts::{AudioFormat, TtsBackend, TtsError, Voice};
+use crate::tts::{AudioFormat, TtsBackend, TtsError, Voice, audio_conversion};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
@@ -7,6 +7,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 const SYNTHESIZE_URL: &str = "https://texttospeech.googleapis.com/v1/text:synthesize";
+
+/// Google's limit on the text in one request.
+const MAX_REQUEST_BYTES: usize = 5000;
 
 pub const API_KEY_VAR: &str = "GOOGLE_CLOUD_API_KEY";
 
@@ -231,8 +234,33 @@ struct TtsResponse {
     audio_content: String,
 }
 
-impl TtsBackend for GoogleTts {
-    fn synthesize(&self, text: &str, format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
+/// Splits text into pieces of at most `max_bytes`, after a sentence where possible, else after a
+/// comma or a space.
+fn split_text(text: &str, max_bytes: usize) -> Vec<&str> {
+    let mut pieces = Vec::new();
+    let mut rest = text.trim();
+    while rest.len() > max_bytes {
+        let end = (1..=max_bytes)
+            .rev()
+            .find(|&i| rest.is_char_boundary(i))
+            .unwrap_or(rest.len());
+        let window = &rest[..end];
+        let cut = [". ", ", ", " "]
+            .iter()
+            .find_map(|separator| window.rfind(separator).map(|i| i + separator.len()))
+            .unwrap_or(end);
+        pieces.push(rest[..cut].trim_end());
+        rest = rest[cut..].trim_start();
+    }
+    if !rest.is_empty() {
+        pieces.push(rest);
+    }
+    pieces
+}
+
+impl GoogleTts {
+    /// One request to Google, for text within its limit.
+    fn synthesize_piece(&self, text: &str, format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
         // Google resamples, so a WAV to be converted already has the target format's rate.
         let request = TtsRequest {
             input: TtsInput {
@@ -268,9 +296,24 @@ impl TtsBackend for GoogleTts {
             .json()
             .map_err(|e| TtsError::SynthesisError(format!("Failed to parse response: {}", e)))?;
 
-        let audio_data = base64::engine::general_purpose::STANDARD
+        base64::engine::general_purpose::STANDARD
             .decode(&tts_response.audio_content)
-            .map_err(|e| TtsError::SynthesisError(format!("Failed to decode audio: {}", e)))?;
+            .map_err(|e| TtsError::SynthesisError(format!("Failed to decode audio: {}", e)))
+    }
+}
+
+impl TtsBackend for GoogleTts {
+    fn synthesize(&self, text: &str, format: &AudioFormat) -> Result<Vec<u8>, TtsError> {
+        let pieces = split_text(text, MAX_REQUEST_BYTES)
+            .into_iter()
+            .map(|piece| self.synthesize_piece(piece, format))
+            .collect::<Result<Vec<_>, _>>()?;
+        // MP3 frames and Ogg streams can follow one another; WAVs need one header.
+        let audio_data = match pieces.len() {
+            1 => pieces.into_iter().next().unwrap_or_default(),
+            _ if google_encoding(format) == "LINEAR16" => audio_conversion::join_wavs(&pieces)?,
+            _ => pieces.concat(),
+        };
 
         if format.is_raw() {
             crate::tts::TtsPlayer::convert_audio_format(&audio_data, &AudioFormat::Wav, format)
@@ -377,6 +420,40 @@ mod tests {
         fs::write(&path, "the-key\n").unwrap();
         assert_eq!(read_api_key(&path).unwrap(), "the-key");
         assert_eq!(api_key(Some(&path)).unwrap(), "the-key");
+    }
+
+    #[test]
+    fn long_text_is_split_within_the_limit_at_sentences() {
+        let text = "One two three... Four five, six seven eight... Nine.";
+        assert_eq!(split_text(text, 100), [text]);
+        assert_eq!(
+            split_text(text, 30),
+            ["One two three...", "Four five, six seven eight...", "Nine."]
+        );
+        assert_eq!(
+            split_text(text, 12),
+            [
+                "One two",
+                "three...",
+                "Four five,",
+                "six seven",
+                "eight...",
+                "Nine."
+            ]
+        );
+        assert_eq!(split_text("abcdefgh", 3), ["abc", "def", "gh"]);
+        assert_eq!(
+            split_text("\u{e9}\u{e9}\u{e9}", 3),
+            ["\u{e9}", "\u{e9}", "\u{e9}"]
+        );
+        assert!(split_text("  ", 3).is_empty());
+
+        let long = "Sunny, with a high near 73. ".repeat(400);
+        let pieces = split_text(&long, MAX_REQUEST_BYTES);
+        assert!(pieces.len() > 1);
+        assert!(pieces.iter().all(|piece| piece.len() <= MAX_REQUEST_BYTES));
+        assert!(pieces.iter().all(|piece| piece.ends_with("73.")));
+        assert_eq!(pieces.join(" "), long.trim());
     }
 
     #[test]
