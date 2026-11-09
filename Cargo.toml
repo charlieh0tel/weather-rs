@@ -1,6 +1,6 @@
 [package]
 name = "weather"
-version = "0.9.11"
+version = "0.9.12"
 # The name weather on crates.io belongs to a different project, so this cannot publish under it.
 publish = false
 edition = "2024"
