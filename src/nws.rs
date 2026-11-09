@@ -42,12 +42,21 @@ impl fmt::Display for Coordinates {
     }
 }
 
-/// A place given as an ICAO station, `latitude,longitude` or a US street address.
+/// A place given as an ICAO station, `latitude,longitude`, a US street address (starting with a
+/// house number) or any other name, such as "Mountain View, CA".
 #[derive(Debug, Clone, PartialEq)]
 pub enum Location {
     Station(String),
     Coordinates(Coordinates),
     Address(String),
+    Name(String),
+}
+
+/// A street address starts with a house number, such as "200" in "200 E Santa Clara St".
+fn is_street_address(s: &str) -> bool {
+    s.split_once(' ').is_some_and(|(number, rest)| {
+        !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()) && !rest.trim().is_empty()
+    })
 }
 
 impl FromStr for Location {
@@ -65,8 +74,10 @@ impl FromStr for Location {
         }
         if validate_icao(s).is_ok() {
             Ok(Location::Station(s.to_uppercase()))
-        } else {
+        } else if is_street_address(s) {
             Ok(Location::Address(s.to_string()))
+        } else {
+            Ok(Location::Name(s.to_string()))
         }
     }
 }
@@ -220,7 +231,8 @@ impl NwsClient {
         get_json(&self.http, SERVICE, url, query)
     }
 
-    /// Finds stations with api.weather.gov and addresses with the US Census geocoder.
+    /// Finds stations with api.weather.gov, addresses with the US Census geocoder and other names
+    /// with Nominatim.
     pub fn locate(&self, location: &Location) -> Result<Place> {
         match location {
             Location::Coordinates(coordinates) => Ok(Place {
@@ -228,9 +240,18 @@ impl NwsClient {
                 name: None,
             }),
             Location::Station(id) => self
-                .get::<StationFeature>(&format!("{BASE_URL}/stations/{id}"), &[])?
+                .get::<StationFeature>(&format!("{BASE_URL}/stations/{id}"), &[])
+                .map_err(|e| match e {
+                    WeatherError::HttpStatus { status, .. }
+                        if status == reqwest::StatusCode::NOT_FOUND =>
+                    {
+                        WeatherError::UnknownStation(id.clone())
+                    }
+                    e => e,
+                })?
                 .into_place(),
-            Location::Address(address) => geocode::locate(&self.http, address),
+            Location::Address(address) => geocode::locate_address(&self.http, address),
+            Location::Name(name) => geocode::locate_name(&self.http, name),
         }
     }
 
@@ -296,6 +317,12 @@ mod tests {
                 "200 E Santa Clara St, San Jose, CA",
                 Location::Address("200 E Santa Clara St, San Jose, CA".to_string()),
             ),
+            (
+                "Mountain View, CA",
+                Location::Name("Mountain View, CA".to_string()),
+            ),
+            ("94043", Location::Name("94043".to_string())),
+            ("Route 66", Location::Name("Route 66".to_string())),
         ];
 
         for (input, expected) in cases {

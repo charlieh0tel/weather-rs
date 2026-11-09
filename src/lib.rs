@@ -28,6 +28,8 @@ pub enum WeatherError {
     NoData(String),
     InvalidLocation(String),
     AddressNotFound(String),
+    PlaceNotFound(String),
+    UnknownStation(String),
     NoForecast(String),
     Usage(String),
 }
@@ -66,11 +68,18 @@ impl fmt::Display for WeatherError {
             ),
             WeatherError::InvalidLocation(location) => write!(
                 f,
-                "Invalid location '{location}': expected an ICAO station, latitude,longitude or a US street address"
+                "Invalid location '{location}': expected a station, latitude,longitude, a US street address or a place name"
             ),
             WeatherError::AddressNotFound(address) => {
                 write!(f, "The Census geocoder found no match for '{address}'")
             }
+            WeatherError::PlaceNotFound(name) => {
+                write!(f, "OpenStreetMap found no place in the US called '{name}'")
+            }
+            WeatherError::UnknownStation(id) => write!(
+                f,
+                "{id} is not a National Weather Service station; they are only in the US"
+            ),
             WeatherError::NoForecast(point) => {
                 write!(f, "api.weather.gov has no forecast for {point}")
             }
