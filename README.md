@@ -6,7 +6,7 @@ National Weather Service's forecast and alerts from
 [api.weather.gov](https://www.weather.gov/documentation/services-web-api).  It
 speaks them, writes them to audio files, or plays them on an AllStar node.
 
-The `weather` package installs four commands:
+The `weather-rs` package installs four commands:
 
 | Command | What it does |
 |---|---|
@@ -24,8 +24,11 @@ Debian packages for amd64 and arm64 are attached to each
 [GitHub release](https://github.com/charlieh0tel/weather-rs/releases):
 
 ```sh
-sudo apt install ./weather_*_amd64.deb
+sudo apt install ./weather-rs_*_amd64.deb
 ```
+
+Until 0.9.11 the package was called `weather`.  Installing `weather-rs`
+replaces it; the commands keep their names.
 
 To build from source, install the packages in `packages.txt` and run
 `cargo build --release`.  Writing `ulaw`, `alaw` and `gsm`, and `sln16` from
