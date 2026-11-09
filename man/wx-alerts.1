@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH wx-alerts 1  "alerts " 
+.SH NAME
+wx\-alerts \- Active National Weather Service alerts (US only)
+.SH SYNOPSIS
+\fBwx alerts\fR [\fB\-\-only\-if\-any\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIPLACE\fR> 
+.SH DESCRIPTION
+Active National Weather Service alerts (US only)
+.SH OPTIONS
+.TP
+\fB\-\-only\-if\-any\fR
+Announce nothing when no alerts are in effect, instead of saying so
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIPLACE\fR>
+A station (KSJC), latitude,longitude, US street address or place name ("Mountain View, CA"); quotes are optional

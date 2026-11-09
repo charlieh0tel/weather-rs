@@ -52,6 +52,16 @@ pub enum Location {
     Name(String),
 }
 
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Location::Station(id) => write!(f, "{id}"),
+            Location::Coordinates(coordinates) => write!(f, "{coordinates}"),
+            Location::Address(text) | Location::Name(text) => write!(f, "{text}"),
+        }
+    }
+}
+
 /// A street address starts with a house number, such as "200" in "200 E Santa Clara St".
 fn is_street_address(s: &str) -> bool {
     s.split_once(' ').is_some_and(|(number, rest)| {

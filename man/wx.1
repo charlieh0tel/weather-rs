@@ -1,0 +1,26 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH wx 1  "wx " 
+.SH NAME
+wx \- Weather reports, printed, spoken or played on an AllStar node
+.SH SYNOPSIS
+\fBwx\fR [\fB\-h\fR|\fB\-\-help\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Weather reports, printed, spoken or played on an AllStar node
+.SH OPTIONS
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+wx\-metar(1)
+Current conditions from the nearest METAR station, from aviationweather.gov
+.TP
+wx\-nws(1)
+The National Weather Service forecast (US only)
+.TP
+wx\-alerts(1)
+Active National Weather Service alerts (US only)
+.TP
+wx\-where(1)
+The National Weather Service office, grid, zones and nearest stations for a place

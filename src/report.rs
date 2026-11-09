@@ -1,7 +1,7 @@
 //! The report a command announces, and the options that choose it.
 
 use crate::{
-    Result, WeatherError, fetch_weather_data,
+    MetarData, Result, WeatherError, fetch_weather_data,
     nws::{Location, NwsClient},
     tts::{
         AnnouncementFormat, TemperatureUnit, alerts_announcement, forecast_announcement,
@@ -30,7 +30,7 @@ pub struct ReportArgs {
     pub report: Report,
 
     /// Output format for the metar announcement
-    #[arg(short, long, value_enum, default_value = "speech")]
+    #[arg(short, long, value_enum, default_value = "full")]
     pub format: AnnouncementFormat,
 
     /// Temperature unit for metar (the detailed format always gives both)
@@ -85,6 +85,56 @@ pub fn announcement(args: &ReportArgs) -> Result<Option<String>> {
     let periods = nws.forecast(&nws.point(coordinates)?)?;
     let count = periods.len().min(args.periods.unwrap_or(2).into());
     Ok(Some(forecast_announcement(&periods[..count])))
+}
+
+/// The METAR station for a place: the station given, or else the nearest National Weather
+/// Service observation station with an ICAO identifier.
+pub fn metar_station(place: &Location) -> Result<String> {
+    if let Location::Station(id) = place {
+        return Ok(id.clone());
+    }
+    let nws = NwsClient::new()?;
+    let point = nws.point(nws.locate(place)?.coordinates)?;
+    let station = nws
+        .stations(&point, 10)?
+        .into_iter()
+        .find(|station| crate::validate_icao(&station.station_identifier).is_ok())
+        .ok_or_else(|| WeatherError::NoMetarStation(place.to_string()))?;
+    let distance = station
+        .distance
+        .map(|metres| format!(", {:.1} km away", metres / 1000.0))
+        .unwrap_or_default();
+    eprintln!(
+        "Using {} ({}{distance})",
+        station.station_identifier, station.name
+    );
+    Ok(station.station_identifier)
+}
+
+/// The latest METAR for a place.
+pub fn metar(place: &Location) -> Result<MetarData> {
+    fetch_weather_data(&metar_station(place)?)
+}
+
+/// The National Weather Service forecast for a place, as text to speak.
+pub fn nws_forecast(place: &Location, periods: usize) -> Result<String> {
+    let nws = NwsClient::new()?;
+    let point = nws.point(nws.locate(place)?.coordinates)?;
+    let forecast = nws.forecast(&point)?;
+    Ok(forecast_announcement(
+        &forecast[..periods.min(forecast.len())],
+    ))
+}
+
+/// Active National Weather Service alerts for a place, as text to speak.  `None` means none are
+/// in effect and `only_if_any` was set.
+pub fn alerts(place: &Location, only_if_any: bool) -> Result<Option<String>> {
+    let nws = NwsClient::new()?;
+    let alerts = nws.alerts(nws.locate(place)?.coordinates)?;
+    if alerts.is_empty() && only_if_any {
+        return Ok(None);
+    }
+    Ok(Some(alerts_announcement(&alerts)))
 }
 
 #[cfg(test)]
