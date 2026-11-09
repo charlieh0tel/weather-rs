@@ -6,6 +6,7 @@ use std::time::Duration;
 mod abbreviations;
 mod geocode;
 pub mod nws;
+pub mod report;
 pub mod tts;
 mod weather_groups;
 
@@ -28,6 +29,7 @@ pub enum WeatherError {
     InvalidLocation(String),
     AddressNotFound(String),
     NoForecast(String),
+    Usage(String),
 }
 
 impl fmt::Display for WeatherError {
@@ -72,6 +74,7 @@ impl fmt::Display for WeatherError {
             WeatherError::NoForecast(point) => {
                 write!(f, "api.weather.gov has no forecast for {point}")
             }
+            WeatherError::Usage(message) => write!(f, "{message}"),
         }
     }
 }

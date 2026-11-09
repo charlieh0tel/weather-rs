@@ -128,6 +128,7 @@ pub enum TtsError {
     AudioConversionError(String),
     PlaybackError(String),
     FileError(String),
+    ApiKeyError(String),
 }
 
 impl fmt::Display for TtsError {
@@ -137,6 +138,7 @@ impl fmt::Display for TtsError {
             TtsError::AudioConversionError(msg) => write!(f, "Audio conversion error: {}", msg),
             TtsError::PlaybackError(msg) => write!(f, "Audio playback error: {}", msg),
             TtsError::FileError(msg) => write!(f, "File operation error: {}", msg),
+            TtsError::ApiKeyError(msg) => write!(f, "{}", msg),
         }
     }
 }

@@ -1,8 +1,67 @@
 use crate::tts::{AudioFormat, TtsBackend, TtsError, Voice};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use std::ffi::OsString;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 
 const SYNTHESIZE_URL: &str = "https://texttospeech.googleapis.com/v1/text:synthesize";
+
+pub const API_KEY_VAR: &str = "GOOGLE_CLOUD_API_KEY";
+
+/// `$XDG_CONFIG_HOME/speak-weather/google-api-key`, where the config directory defaults to
+/// `~/.config`.
+fn api_key_path(config_home: Option<OsString>, home: Option<OsString>) -> Option<PathBuf> {
+    let config = match config_home.filter(|dir| !dir.is_empty()) {
+        Some(dir) => PathBuf::from(dir),
+        None => PathBuf::from(home?).join(".config"),
+    };
+    Some(config.join("speak-weather").join("google-api-key"))
+}
+
+fn read_api_key(path: &Path) -> Result<String, TtsError> {
+    let contents = fs::read_to_string(path).map_err(|e| {
+        TtsError::ApiKeyError(format!(
+            "No Google API key: set {API_KEY_VAR} or put the key in {} ({e})",
+            path.display()
+        ))
+    })?;
+    if let Ok(metadata) = fs::metadata(path)
+        && metadata.permissions().mode() & 0o077 != 0
+    {
+        eprintln!(
+            "Warning: {} can be read by other users; chmod 600 it",
+            path.display()
+        );
+    }
+
+    let key = contents.trim();
+    if key.is_empty() {
+        return Err(TtsError::ApiKeyError(format!(
+            "{} is empty",
+            path.display()
+        )));
+    }
+    Ok(key.to_string())
+}
+
+/// The Google API key, from `GOOGLE_CLOUD_API_KEY` or else the key file.
+pub fn api_key() -> Result<String, TtsError> {
+    if let Ok(key) = std::env::var(API_KEY_VAR) {
+        return Ok(key);
+    }
+    let path = api_key_path(
+        std::env::var_os("XDG_CONFIG_HOME"),
+        std::env::var_os("HOME"),
+    )
+    .ok_or_else(|| {
+        TtsError::ApiKeyError(format!(
+            "No Google API key: set {API_KEY_VAR}, or HOME so the key file can be found"
+        ))
+    })?;
+    read_api_key(&path)
+}
 
 #[derive(Debug, Clone)]
 pub enum GoogleVoice {
@@ -281,6 +340,37 @@ mod tests {
         assert_eq!(tts.voice_name, "en-US-Chirp3-HD-Leda");
         assert_eq!(tts.language_code, "en-US");
         assert!(GoogleTts::with_voice_name("key".to_string(), "Leda").is_err());
+    }
+
+    #[test]
+    fn api_key_file_is_in_the_config_directory() {
+        let key_file = |config_home: Option<&str>, home: Option<&str>| {
+            api_key_path(config_home.map(Into::into), home.map(Into::into))
+        };
+        let expected = |dir: &str| Some(Path::new(dir).join("speak-weather/google-api-key"));
+
+        assert_eq!(key_file(Some("/xdg"), Some("/home/u")), expected("/xdg"));
+        assert_eq!(key_file(None, Some("/home/u")), expected("/home/u/.config"));
+        assert_eq!(
+            key_file(Some(""), Some("/home/u")),
+            expected("/home/u/.config")
+        );
+        assert_eq!(key_file(None, None), None);
+    }
+
+    #[test]
+    fn api_key_file_is_read_and_trimmed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("google-api-key");
+        let message = |path: &Path| read_api_key(path).unwrap_err().to_string();
+
+        assert!(message(&path).contains(API_KEY_VAR));
+
+        fs::write(&path, "  \n").unwrap();
+        assert!(message(&path).contains("empty"));
+
+        fs::write(&path, "the-key\n").unwrap();
+        assert_eq!(read_api_key(&path).unwrap(), "the-key");
     }
 
     #[test]
