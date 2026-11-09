@@ -84,8 +84,18 @@ kHz channels; ASL3 doesn't load it by default, so add this to
 load => codec_resample.so
 ```
 
-`w6otx-say-wx.sh` is an example: it writes the weather for one airport and
-plays it on a node with `rpt localplay`.
+`allstar-weather NODE ICAO` speaks the weather at an airport and plays it on
+a node with `rpt localplay`.  It uses Google's `en-US-Chirp3-HD-Leda` voice
+by default; `-h` lists options to change the engine, voice, gain, format and
+style.  It runs well from cron, for example every two hours from 9 am to 5
+pm:
+
+```
+5 9-17/2 * * * allstar-weather 65314 KSJC
+```
+
+It needs to run `sudo -u asterisk asterisk` without a password, and the user
+running it needs the Google API key.
 
 ## License
 

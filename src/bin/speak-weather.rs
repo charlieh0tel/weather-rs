@@ -263,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_the_flags_used_by_the_w6otx_script() {
+    fn accepts_the_flags_used_by_allstar_weather() {
         Cli::try_parse_from([
             "speak-weather",
             "google",
