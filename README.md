@@ -2,13 +2,16 @@
 
 Fetches current METARs from [aviationweather.gov](https://aviationweather.gov)
 and reads them aloud, or writes the announcement to an audio file for an
-AllStar node or other Asterisk system.
+AllStar node or other Asterisk system.  In the US, it can instead read the
+National Weather Service's forecast or alerts from
+[api.weather.gov](https://www.weather.gov/documentation/services-web-api).
 
-The `weather` package installs two commands:
+The `weather` package installs these commands:
 
 - `metar` prints the decoded weather for an airport.
 - `speak-weather` turns it into speech with eSpeak NG or Google Cloud
   Text-to-Speech, or prints the text for another TTS engine.
+- `nws-lookup` finds the National Weather Service identifiers for a place.
 
 They are named so as not to conflict with Debian's `weather-util`, which owns
 `/usr/bin/weather`.
@@ -33,6 +36,9 @@ metar KSJC
 speak-weather espeak KSJC
 speak-weather google --voice-name en-US-Chirp3-HD-Leda KSJC
 speak-weather text -f aviation KSJC
+speak-weather text -r forecast KSJC
+speak-weather text -r alerts "200 E Santa Clara St, San Jose, CA"
+nws-lookup 200 E Santa Clara St, San Jose, CA
 ```
 
 Without `-o`, `speak-weather` speaks through the default audio device.  With
@@ -43,13 +49,54 @@ Options shared by all engines:
 
 | Option | Meaning |
 |---|---|
-| `-f`, `--format` | `speech` (default), `brief`, `detailed` or `aviation` |
-| `-t`, `--temp-unit` | `fahrenheit` (default) or `celsius` |
+| `-r`, `--report` | `metar` (default), `forecast` or `alerts` |
+| `-f`, `--format` | For `metar`: `speech` (default), `brief`, `detailed` or `aviation` |
+| `-t`, `--temp-unit` | For `metar`: `fahrenheit` (default) or `celsius` |
+| `--periods` | For `forecast`: how many half-day periods to read (default 2) |
 | `-o`, `--output` | Write to a file instead of speaking or printing |
+
+For `metar`, the location is an ICAO airport.  For `forecast` and `alerts`,
+it is any place `nws-lookup` accepts (see below).
 
 Audio formats (`-a`): `mp3`, `wav`, `ogg`, `ulaw`, `alaw`, `gsm` and `sln16`.
 
 `--help` on each subcommand lists the rest.
+
+### National Weather Service
+
+The forecast and alerts cover only the US and its territories.  An alert is
+read as its headline, such as "Wind Advisory issued November 8 at 3:02PM AKST
+until November 10 at 6:00PM AKST by NWS Fairbanks AK"; with no alerts in
+effect, it says so.
+
+`speak-weather -r forecast`, `-r alerts` and `nws-lookup` take a place as any
+of:
+
+- an ICAO station, such as `KSJC`, located by api.weather.gov;
+- `latitude,longitude`, such as `37.3592,-121.9242`;
+- a US street address, located by the
+  [US Census geocoder](https://geocoding.geo.census.gov/geocoder/).
+
+`nws-lookup` prints the forecast office, grid square, zones and nearest
+observation stations that the National Weather Service uses for the place:
+
+```
+$ nws-lookup KSJC
+Location:        37.3592,-121.9242 (San Jose, San Jose International Airport)
+Nearest city:    San Jose, CA
+Forecast office: MTR
+Grid:            MTR 98,83
+Forecast zone:   CAZ513
+County zone:     CAC085
+Time zone:       America/Los_Angeles
+Stations:        KSJC   San Jose, San Jose International Airport (1.1 km)
+                 KRHV   San Jose / Reid / Hillv (10.1 km)
+                 KNUQ   Mountain View, Moffett Field (12.2 km)
+                 LSGC1  LOS GATOS (16.3 km)
+                 AW020  AE6EO MOUNTAIN VIEW (16.6 km)
+```
+
+`-n` changes how many stations it lists.
 
 ### eSpeak NG
 
