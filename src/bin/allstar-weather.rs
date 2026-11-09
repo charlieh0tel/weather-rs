@@ -8,7 +8,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 use weather::{
-    report::{ReportArgs, announcement},
+    report::{NOTHING_TO_ANNOUNCE, ReportArgs, announcement},
     tts::{
         AudioFormat, TtsBackend, Voice,
         espeak::{EspeakTts, EspeakVoice},
@@ -88,7 +88,10 @@ fn tts(cli: &Cli) -> Result<Box<dyn TtsBackend>, Box<dyn Error>> {
 
 fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     let tts = tts(&cli)?;
-    let text = announcement(&cli.report)?;
+    let Some(text) = announcement(&cli.report)? else {
+        println!("{NOTHING_TO_ANNOUNCE}");
+        return Ok(());
+    };
     println!("Announcement text: {text}\n");
     let audio = tts.synthesize(&text, &cli.audio_format)?;
 

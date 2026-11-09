@@ -50,8 +50,10 @@ A place, for `forecast`, `alerts` and `nws-lookup`, is any of:
 
 The forecast reads the next half-day periods, two by default.  An alert is read
 as its headline, such as "Wind Advisory issued November 8 at 3:02PM AKST until
-November 10 at 6:00PM AKST by NWS Fairbanks AK"; with no alerts in effect, it
-says so.  If a report can't be fetched, the command fails.
+November 10 at 6:00PM AKST by NWS Fairbanks AK".  With no alerts in effect, it
+says so, or with `--only-if-alerts` announces nothing and exits successfully,
+so alerts can be checked often.  If a report can't be fetched, the command
+fails.
 
 Options for the report:
 
@@ -61,6 +63,7 @@ Options for the report:
 | `-f`, `--format` | For `metar`: `speech`, `brief`, `detailed` or `aviation` |
 | `-t`, `--temp-unit` | For `metar`: `fahrenheit` (default) or `celsius` |
 | `--periods` | For `forecast`: how many half-day periods to read (default 2) |
+| `--only-if-alerts` | For `alerts`: announce nothing when none are in effect |
 
 ## metar
 
@@ -132,11 +135,12 @@ a password.  Besides the report options:
 | `-w`, `--wait` | Seconds the node gets to open the file before it is deleted (default 60) |
 
 It runs well from cron.  For example, the METAR every two hours from 9 am to 5
-pm, and the forecast at 6:35 am:
+pm, the forecast at 6:35 am, and any alerts every 15 minutes:
 
 ```
 5 9-17/2 * * * allstar-weather 65314 KSJC >>/tmp/allstar-weather.log 2>&1
 35 6 * * * allstar-weather -r forecast 65314 KSJC >>/tmp/allstar-weather.log 2>&1
+*/15 * * * * allstar-weather -r alerts --only-if-alerts 65314 KSJC >>/tmp/allstar-weather.log 2>&1
 ```
 
 Without the redirect, cron mails any errors, which usually means they are lost.

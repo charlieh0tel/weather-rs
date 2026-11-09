@@ -40,35 +40,51 @@ pub struct ReportArgs {
     /// Number of half-day forecast periods [default: 2]
     #[arg(long, value_parser = clap::value_parser!(u8).range(1..))]
     pub periods: Option<u8>,
+
+    /// For alerts: announce nothing when no alerts are in effect
+    #[arg(long)]
+    pub only_if_alerts: bool,
 }
 
-/// Fetches the chosen report and writes it as text to speak.
-pub fn announcement(args: &ReportArgs) -> Result<String> {
+pub const NOTHING_TO_ANNOUNCE: &str = "No weather alerts in effect; nothing to announce.";
+
+/// Fetches the chosen report and writes it as text to speak.  `None` means there is nothing to
+/// announce: no alerts are in effect and `--only-if-alerts` was given.
+pub fn announcement(args: &ReportArgs) -> Result<Option<String>> {
     if args.periods.is_some() && args.report != Report::Forecast {
         return Err(WeatherError::Usage(
             "--periods is only for --report forecast".to_string(),
+        ));
+    }
+    if args.only_if_alerts && args.report != Report::Alerts {
+        return Err(WeatherError::Usage(
+            "--only-if-alerts is only for --report alerts".to_string(),
         ));
     }
     println!("Fetching weather for {}...\n", args.location);
 
     if args.report == Report::Metar {
         let metar = fetch_weather_data(&args.location)?;
-        return Ok(generate_weather_announcement(
+        return Ok(Some(generate_weather_announcement(
             &metar,
             &args.format,
             args.temp_unit,
-        ));
+        )));
     }
 
     let location: Location = args.location.parse()?;
     let nws = NwsClient::new()?;
     let coordinates = nws.locate(&location)?.coordinates;
     if args.report == Report::Alerts {
-        return Ok(alerts_announcement(&nws.alerts(coordinates)?));
+        let alerts = nws.alerts(coordinates)?;
+        if alerts.is_empty() && args.only_if_alerts {
+            return Ok(None);
+        }
+        return Ok(Some(alerts_announcement(&alerts)));
     }
     let periods = nws.forecast(&nws.point(coordinates)?)?;
     let count = periods.len().min(args.periods.unwrap_or(2).into());
-    Ok(forecast_announcement(&periods[..count]))
+    Ok(Some(forecast_announcement(&periods[..count])))
 }
 
 #[cfg(test)]
@@ -111,6 +127,14 @@ mod tests {
     fn periods_are_only_for_the_forecast() {
         for report in ["metar", "alerts"] {
             let args = parse(&["-r", report, "--periods", "3", "KSJC"]).unwrap();
+            assert!(matches!(announcement(&args), Err(WeatherError::Usage(_))));
+        }
+    }
+
+    #[test]
+    fn only_if_alerts_is_only_for_alerts() {
+        for report in ["metar", "forecast"] {
+            let args = parse(&["-r", report, "--only-if-alerts", "KSJC"]).unwrap();
             assert!(matches!(announcement(&args), Err(WeatherError::Usage(_))));
         }
     }

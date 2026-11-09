@@ -1,7 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 use weather::{
-    report::{ReportArgs, announcement},
+    report::{NOTHING_TO_ANNOUNCE, ReportArgs, announcement},
     tts::{
         AudioFormat, Voice,
         espeak::{EspeakTts, EspeakVoice},
@@ -112,7 +112,10 @@ fn create_espeak_voice(
 }
 
 fn handle_espeak(args: EspeakArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let announcement = announcement(&args.common.report)?;
+    let Some(announcement) = announcement(&args.common.report)? else {
+        println!("{NOTHING_TO_ANNOUNCE}");
+        return Ok(());
+    };
     println!("Announcement text: {}\n", announcement);
 
     let voice = create_espeak_voice(args.voice, args.speed, args.pitch, args.gap);
@@ -130,7 +133,10 @@ fn handle_espeak(args: EspeakArgs) -> Result<(), Box<dyn std::error::Error>> {
 fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
     let api_key = google_tts::api_key(args.api_key_file.as_deref())?;
 
-    let announcement = announcement(&args.common.report)?;
+    let Some(announcement) = announcement(&args.common.report)? else {
+        println!("{NOTHING_TO_ANNOUNCE}");
+        return Ok(());
+    };
     println!("Announcement text: {}\n", announcement);
 
     let tts = match args.voice_name {
@@ -149,7 +155,10 @@ fn handle_google(args: GoogleArgs) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn handle_text(args: TextArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let announcement = announcement(&args.common.report)?;
+    let Some(announcement) = announcement(&args.common.report)? else {
+        println!("{NOTHING_TO_ANNOUNCE}");
+        return Ok(());
+    };
 
     if let Some(output_path) = args.common.output {
         std::fs::write(&output_path, &announcement)?;
