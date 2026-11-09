@@ -4,13 +4,13 @@
 .SH NAME
 wx\-metar \- Current conditions from the nearest METAR station, from aviationweather.gov
 .SH SYNOPSIS
-\fBwx metar\fR [\fB\-s\fR|\fB\-\-style\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-raw\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIPLACE\fR> 
+\fBwx metar\fR [\fB\-s\fR|\fB\-\-style\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-raw\fR] [\fB\-\-say\fR] [\fB\-o\fR|\fB\-\-out\fR] [\fB\-\-node\fR] [\fB\-l\fR|\fB\-\-to\-links\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-w\fR|\fB\-\-wait\fR] [\fB\-v\fR|\fB\-\-voice\fR] [\fB\-g\fR|\fB\-\-gain\fR] [\fB\-\-api\-key\-file\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIPLACE\fR> 
 .SH DESCRIPTION
 Current conditions from the nearest METAR station, from aviationweather.gov
 .SH OPTIONS
 .TP
-\fB\-s\fR, \fB\-\-style\fR \fI<STYLE>\fR [default: full]
-How to word the announcement
+\fB\-s\fR, \fB\-\-style\fR \fI<STYLE>\fR
+How to word the announcement [default: brief with \-\-node, else full]
 .br
 
 .br
@@ -41,6 +41,53 @@ celsius
 .TP
 \fB\-\-raw\fR
 Print the raw METAR instead of an announcement
+.TP
+\fB\-\-say\fR
+Speak the announcement on this machine
+.TP
+\fB\-o\fR, \fB\-\-out\fR \fI<FILE>\fR
+Write the announcement as audio to FILE, in the format its extension names
+.TP
+\fB\-\-node\fR \fI<NODE>\fR
+Play the announcement on this AllStar node
+.TP
+\fB\-l\fR, \fB\-\-to\-links\fR
+With \-\-node: send it to linked nodes too, not only the node\*(Aqs own transmitter
+.TP
+\fB\-a\fR, \fB\-\-audio\-format\fR \fI<AUDIO_FORMAT>\fR
+Audio format [default: from the file\*(Aqs extension with \-\-out, sln16 with \-\-node]
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+mp3: MP3 format
+.IP \(bu 2
+wav: WAV format (uncompressed)
+.IP \(bu 2
+ogg: OGG format
+.IP \(bu 2
+ulaw: ULAW format (8\-bit G.711)
+.IP \(bu 2
+alaw: ALAW format (8\-bit G.711)
+.IP \(bu 2
+gsm: GSM format (telephony)
+.IP \(bu 2
+sln16: Raw 16\-bit signed linear at 16 kHz, for Asterisk to convert as each channel needs
+.RE
+.TP
+\fB\-w\fR, \fB\-\-wait\fR \fI<WAIT>\fR [default: 60]
+With \-\-node: seconds the node gets to open the audio file before it is deleted
+.TP
+\fB\-v\fR, \fB\-\-voice\fR \fI<VOICE>\fR [default: en\-US\-Chirp3\-HD\-Leda]
+A Google voice name, or espeak
+.TP
+\fB\-g\fR, \fB\-\-gain\fR \fI<GAIN>\fR
+Google volume gain in dB, \-96 to 16 [default: 6]
+.TP
+\fB\-\-api\-key\-file\fR \fI<FILE>\fR
+File holding the Google API key [default: $GOOGLE_CLOUD_API_KEY, else ~/.config/weather\-rs/google\-api\-key]
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help (see a summary with \*(Aq\-h\*(Aq)

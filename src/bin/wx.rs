@@ -1,12 +1,31 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgGroup, Args, Parser, Subcommand};
 use std::error::Error;
+use std::fs::{self, Permissions};
+use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
+use std::process::Command as Process;
+use std::thread;
+use std::time::Duration;
 use weather::{
     nws::{Location, NwsClient},
     report,
-    tts::{AnnouncementFormat, TemperatureUnit, generate_weather_announcement},
+    tts::{
+        AnnouncementFormat, AudioFormat, TemperatureUnit, TtsBackend, Voice,
+        espeak::{EspeakTts, EspeakVoice},
+        execute_tts_output, generate_weather_announcement,
+        google_tts::{self, GoogleTts},
+    },
 };
 
+const DEFAULT_VOICE: &str = "en-US-Chirp3-HD-Leda";
+const DEFAULT_GAIN_DB: f64 = 6.0;
+const ESPEAK: &str = "espeak";
+
 /// Weather reports, printed, spoken or played on an AllStar node.
+///
+/// Each report takes a place, and prints its announcement unless told to speak it (--say),
+/// write it to an audio file (--out) or play it on an AllStar node (--node).
 #[derive(Parser, Debug)]
 #[command(name = "wx", version)]
 struct Cli {
@@ -41,21 +60,71 @@ impl PlaceArgs {
 }
 
 #[derive(Args, Debug)]
+#[command(group(ArgGroup::new("destination").args(["say", "out", "node"])))]
+struct OutputArgs {
+    /// Speak the announcement on this machine
+    #[arg(long)]
+    say: bool,
+
+    /// Write the announcement as audio to FILE, in the format its extension names
+    #[arg(short, long, value_name = "FILE")]
+    out: Option<PathBuf>,
+
+    /// Play the announcement on this AllStar node
+    #[arg(long, value_name = "NODE")]
+    node: Option<u32>,
+
+    /// With --node: send it to linked nodes too, not only the node's own transmitter
+    #[arg(short = 'l', long, requires = "node")]
+    to_links: bool,
+
+    /// Audio format [default: from the file's extension with --out, sln16 with --node]
+    #[arg(short, long, value_enum)]
+    audio_format: Option<AudioFormat>,
+
+    /// With --node: seconds the node gets to open the audio file before it is deleted
+    #[arg(short, long, default_value_t = 60, requires = "node")]
+    wait: u64,
+}
+
+#[derive(Args, Debug)]
+struct VoiceArgs {
+    /// A Google voice name, or espeak
+    #[arg(short, long, default_value = DEFAULT_VOICE)]
+    voice: String,
+
+    /// Google volume gain in dB, -96 to 16 [default: 6]
+    #[arg(short, long, allow_negative_numbers = true)]
+    gain: Option<f64>,
+
+    /// File holding the Google API key [default: $GOOGLE_CLOUD_API_KEY, else
+    /// ~/.config/weather-rs/google-api-key]
+    #[arg(long, value_name = "FILE")]
+    api_key_file: Option<PathBuf>,
+}
+
+#[derive(Args, Debug)]
 struct MetarArgs {
     #[command(flatten)]
     place: PlaceArgs,
 
-    /// How to word the announcement
-    #[arg(short, long, value_enum, default_value = "full")]
-    style: AnnouncementFormat,
+    /// How to word the announcement [default: brief with --node, else full]
+    #[arg(short, long, value_enum)]
+    style: Option<AnnouncementFormat>,
 
     /// Temperature unit (the detailed style always gives both)
     #[arg(short, long, value_enum, default_value = "fahrenheit")]
     temp_unit: TemperatureUnit,
 
     /// Print the raw METAR instead of an announcement
-    #[arg(long)]
+    #[arg(long, conflicts_with_all = ["say", "out", "node"])]
     raw: bool,
+
+    #[command(flatten)]
+    output: OutputArgs,
+
+    #[command(flatten)]
+    voice: VoiceArgs,
 }
 
 #[derive(Args, Debug)]
@@ -66,6 +135,12 @@ struct NwsArgs {
     /// Number of half-day forecast periods
     #[arg(short, long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..))]
     periods: u8,
+
+    #[command(flatten)]
+    output: OutputArgs,
+
+    #[command(flatten)]
+    voice: VoiceArgs,
 }
 
 #[derive(Args, Debug)]
@@ -76,6 +151,12 @@ struct AlertsArgs {
     /// Announce nothing when no alerts are in effect, instead of saying so
     #[arg(long)]
     only_if_any: bool,
+
+    #[command(flatten)]
+    output: OutputArgs,
+
+    #[command(flatten)]
+    voice: VoiceArgs,
 }
 
 #[derive(Args, Debug)]
@@ -138,35 +219,125 @@ fn print_where(args: &WhereArgs) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// The text to announce, or `None` when there is nothing to announce.
-fn announcement(command: &Command) -> Result<Option<String>, Box<dyn Error>> {
-    Ok(match command {
-        Command::Metar(args) => {
-            let metar = report::metar(&args.place.location()?)?;
-            Some(if args.raw {
-                metar.raw_ob
-            } else {
-                generate_weather_announcement(&metar, &args.style, args.temp_unit)
-            })
+fn tts(voice: &VoiceArgs) -> Result<Box<dyn TtsBackend>, Box<dyn Error>> {
+    if voice.voice == ESPEAK {
+        if voice.gain.is_some() || voice.api_key_file.is_some() {
+            return Err("--gain and --api-key-file are only for Google voices".into());
         }
-        Command::Nws(args) => Some(report::nws_forecast(
-            &args.place.location()?,
-            args.periods.into(),
-        )?),
-        Command::Alerts(args) => report::alerts(&args.place.location()?, args.only_if_any)?,
-        Command::Where(_) => unreachable!("where prints its own output"),
-    })
+        return Ok(Box::new(EspeakTts::new(EspeakVoice::from(Voice::Default))?));
+    }
+    let api_key = google_tts::api_key(voice.api_key_file.as_deref())?;
+    let tts = GoogleTts::with_voice_name(api_key, &voice.voice)?
+        .with_gain(voice.gain.unwrap_or(DEFAULT_GAIN_DB))?;
+    Ok(Box::new(tts))
+}
+
+/// Plays audio on an AllStar node, by running `sudo -u asterisk asterisk`.
+fn play_on_node(
+    audio: &[u8],
+    format: &AudioFormat,
+    output: &OutputArgs,
+    node: u32,
+) -> Result<(), Box<dyn Error>> {
+    // Asterisk runs as another user, so the file goes where it can read it.
+    let mut file = tempfile::Builder::new()
+        .prefix("wx-")
+        .suffix(&format!(".{}", format.file_extension()))
+        .tempfile_in("/tmp")?;
+    file.write_all(audio)?;
+    fs::set_permissions(file.path(), Permissions::from_mode(0o644))?;
+
+    // localplay plays on the node's own transmitter; playback also sends to linked nodes.  Both
+    // take the file name without its extension.
+    let play = if output.to_links {
+        "playback"
+    } else {
+        "localplay"
+    };
+    let command = format!(
+        "rpt {play} {node} {}",
+        file.path().with_extension("").display()
+    );
+    // From a directory the asterisk user can read, or Asterisk warns about it.
+    let status = Process::new("sudo")
+        .args(["-u", "asterisk", "asterisk", "-x", &command])
+        .current_dir("/")
+        .status()?;
+    if !status.success() {
+        return Err(format!("Asterisk failed to run '{command}': {status}").into());
+    }
+
+    thread::sleep(Duration::from_secs(output.wait));
+    Ok(())
+}
+
+fn deliver(text: &str, output: &OutputArgs, voice: &VoiceArgs) -> Result<(), Box<dyn Error>> {
+    if !(output.say || output.out.is_some() || output.node.is_some()) {
+        if output.audio_format.is_some() {
+            return Err("--audio-format needs --out or --node".into());
+        }
+        println!("{}", text.trim());
+        return Ok(());
+    }
+
+    let tts = tts(voice)?;
+    eprintln!("Announcement text: {text}\n");
+    if let Some(node) = output.node {
+        let format = output.audio_format.clone().unwrap_or(AudioFormat::Sln16);
+        let audio = tts.synthesize(text, &format)?;
+        return play_on_node(&audio, &format, output, node);
+    }
+    let path = output
+        .out
+        .as_ref()
+        .map(|path| path.to_string_lossy().into_owned());
+    let default = if voice.voice == ESPEAK {
+        AudioFormat::Wav
+    } else {
+        AudioFormat::Mp3
+    };
+    let format = AudioFormat::resolve(output.audio_format.clone(), path.as_deref(), default)?;
+    execute_tts_output(&*tts, text, path, &format)?;
+    Ok(())
 }
 
 fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
-    if let Command::Where(args) = &cli.command {
-        return print_where(args);
+    let (text, output, voice) = match &cli.command {
+        Command::Where(args) => return print_where(args),
+        Command::Metar(args) => {
+            let metar = report::metar(&args.place.location()?)?;
+            let text = if args.raw {
+                metar.raw_ob
+            } else {
+                let style = args.style.clone().unwrap_or(match args.output.node {
+                    Some(_) => AnnouncementFormat::Brief,
+                    None => AnnouncementFormat::Full,
+                });
+                generate_weather_announcement(&metar, &style, args.temp_unit)
+            };
+            (Some(text), &args.output, &args.voice)
+        }
+        Command::Nws(args) => (
+            Some(report::nws_forecast(
+                &args.place.location()?,
+                args.periods.into(),
+            )?),
+            &args.output,
+            &args.voice,
+        ),
+        Command::Alerts(args) => (
+            report::alerts(&args.place.location()?, args.only_if_any)?,
+            &args.output,
+            &args.voice,
+        ),
+    };
+    match text {
+        Some(text) => deliver(&text, output, voice),
+        None => {
+            eprintln!("{}", report::NOTHING_TO_ANNOUNCE);
+            Ok(())
+        }
     }
-    match announcement(&cli.command)? {
-        Some(text) => println!("{}", text.trim()),
-        None => eprintln!("{}", report::NOTHING_TO_ANNOUNCE),
-    }
-    Ok(())
 }
 
 fn main() {
@@ -230,5 +401,30 @@ mod tests {
         assert!(parse(&["alerts", "--style", "brief", "KSJC"]).is_err());
         assert!(parse(&["nws", "--periods", "0", "KSJC"]).is_err());
         assert!(parse(&["metar"]).is_err());
+    }
+
+    #[test]
+    fn one_destination_at_a_time() {
+        assert!(parse(&["metar", "KSJC", "--node", "65314", "--to-links"]).is_ok());
+        assert!(parse(&["metar", "KSJC", "--say", "--node", "65314"]).is_err());
+        assert!(parse(&["metar", "KSJC", "--say", "-o", "x.mp3"]).is_err());
+        assert!(parse(&["metar", "KSJC", "--to-links"]).is_err());
+        assert!(parse(&["metar", "KSJC", "--wait", "5"]).is_err());
+        assert!(parse(&["metar", "KSJC", "--raw", "--node", "65314"]).is_err());
+    }
+
+    #[test]
+    fn google_options_are_refused_for_espeak() {
+        for flags in [["--gain", "3"], ["--api-key-file", "key"]] {
+            let args: Vec<&str> = ["metar", "KSJC", "--voice", "espeak"]
+                .into_iter()
+                .chain(flags)
+                .collect();
+            let Command::Metar(args) = parse(&args).unwrap().command else {
+                panic!()
+            };
+            let message = tts(&args.voice).err().unwrap().to_string();
+            assert!(message.contains("only for Google voices"), "{message}");
+        }
     }
 }

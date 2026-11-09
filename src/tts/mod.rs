@@ -224,7 +224,7 @@ impl TtsPlayer {
     }
 }
 
-pub fn execute_tts_output<T: TtsBackend>(
+pub fn execute_tts_output<T: TtsBackend + ?Sized>(
     tts: &T,
     announcement: &str,
     output_path: Option<String>,
