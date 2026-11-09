@@ -1,4 +1,4 @@
-# Makefile for weather-rs testing
+# Makefile for weather-rs testing.  The google targets call Google Cloud TTS, which is billed.
 
 # Configuration
 ICAO ?= KJFK
@@ -6,10 +6,10 @@ OUTPUT_DIR ?= /tmp
 PROFILE ?= release
 
 BUILD_CMD := cargo build $(if $(filter release,$(PROFILE)),--release)
-RUN_CMD := cargo run $(if $(filter release,$(PROFILE)),--release) --bin
+WX := cargo run $(if $(filter release,$(PROFILE)),--release) --bin wx --
 
-FORMATS := wav ulaw alaw gsm
-ANNOUNCEMENT_FORMATS := speech brief detailed aviation
+FORMATS := wav ulaw alaw gsm sln16
+STYLES := full brief detailed aviation
 
 all: test
 .PHONY: all
@@ -18,41 +18,39 @@ build:
 	$(BUILD_CMD)
 .PHONY: build
 
-test: build test-metar test-all-formats test-speech test-text
+test: build test-reports test-all-formats test-speech
 .PHONY: test
 
-test-metar: build
-	$(RUN_CMD) metar -- $(ICAO)
-.PHONY: test-metar
+test-reports: build
+	$(WX) metar $(ICAO)
+	$(WX) metar --raw $(ICAO)
+	$(WX) nws $(ICAO)
+	$(WX) alerts $(ICAO)
+	$(WX) where $(ICAO)
+.PHONY: test-reports
 
 test-all-formats: $(addprefix test-espeak-,$(FORMATS)) $(addprefix test-google-,$(FORMATS))
 .PHONY: test-all-formats
 
 test-espeak-%: build
-	$(RUN_CMD) speak-weather -- espeak $(ICAO) --output $(OUTPUT_DIR)/$(ICAO)-espeak.$* --audio-format $* --format aviation
+	$(WX) metar $(ICAO) --style aviation --voice espeak --out $(OUTPUT_DIR)/$(ICAO)-espeak.$*
 	@file $(OUTPUT_DIR)/$(ICAO)-espeak.$*
 
 test-google-%: build
-	$(RUN_CMD) speak-weather -- google $(ICAO) --output $(OUTPUT_DIR)/$(ICAO)-google.$* --audio-format $* --format aviation
+	$(WX) metar $(ICAO) --style aviation --out $(OUTPUT_DIR)/$(ICAO)-google.$*
 	@file $(OUTPUT_DIR)/$(ICAO)-google.$*
 
-test-announcement-formats: $(addprefix test-announcement-,$(ANNOUNCEMENT_FORMATS))
-.PHONY: test-announcement-formats
+test-styles: $(addprefix test-style-,$(STYLES))
+.PHONY: test-styles
 
-test-announcement-%: build
-	$(RUN_CMD) speak-weather -- text $(ICAO) --format $* --output $(OUTPUT_DIR)/$(ICAO)-$*.txt
-	@echo "Generated announcement ($*):"
-	@cat $(OUTPUT_DIR)/$(ICAO)-$*.txt
+test-style-%: build
+	$(WX) metar $(ICAO) --style $*
 
 test-speech: build
-	$(RUN_CMD) speak-weather -- espeak $(ICAO) --format aviation
-	$(RUN_CMD) speak-weather -- google $(ICAO) --format aviation
+	$(WX) metar $(ICAO) --style aviation --voice espeak --say
+	$(WX) metar $(ICAO) --style aviation --say
 .PHONY: test-speech
 
-test-text: build
-	$(RUN_CMD) speak-weather -- text $(ICAO) --format aviation
-.PHONY: test-text
-
 clean:
-	rm -f $(OUTPUT_DIR)/$(ICAO)-espeak.* $(OUTPUT_DIR)/$(ICAO)-google.* $(OUTPUT_DIR)/$(ICAO)-*.txt
+	rm -f $(OUTPUT_DIR)/$(ICAO)-espeak.* $(OUTPUT_DIR)/$(ICAO)-google.*
 .PHONY: clean

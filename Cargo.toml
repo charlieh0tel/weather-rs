@@ -5,7 +5,7 @@ version = "0.9.12"
 publish = false
 edition = "2024"
 license = "BSD-3-Clause"
-description = "Aviation weather (METAR) reports with text-to-speech"
+description = "Weather reports (METARs, NWS forecasts and alerts) with text-to-speech"
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
@@ -29,11 +29,11 @@ maintainer = "Christopher Hoover <ch@murgatroid.com>"
 copyright = "2025, Christopher Hoover <ch@murgatroid.com>"
 license-file = ["LICENSE", "4"]
 extended-description = """\
-metar fetches and decodes current METARs from aviationweather.gov.
-speak-weather reads them aloud with eSpeak NG or Google Cloud
-Text-to-Speech, or writes audio files for Asterisk and AllStar nodes.
-nws-lookup finds the National Weather Service forecast office, grid,
-zones and observation stations for a station, coordinates or address."""
+wx reports the weather for a station, coordinates, a US address or a
+place name: current conditions (METARs) from aviationweather.gov, and the
+National Weather Service's forecast and alerts from api.weather.gov.  It
+prints them, speaks them with eSpeak NG or Google Cloud Text-to-Speech,
+writes them to audio files, or plays them on an AllStar node."""
 # HTTPS verifies against the system's certificate store.
 depends = "$auto, ca-certificates, sox"
 # The package was called weather until 0.9.11.
@@ -42,10 +42,7 @@ replaces = "weather (<< 0.9.12)"
 section = "utils"
 priority = "optional"
 assets = [
-    ["target/release/metar", "usr/bin/", "755"],
-    ["target/release/speak-weather", "usr/bin/", "755"],
-    ["target/release/nws-lookup", "usr/bin/", "755"],
-    ["target/release/allstar-weather", "usr/bin/", "755"],
+    ["target/release/wx", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/weather-rs/", "644"],
     ["man/*.1", "usr/share/man/man1/", "644"],
 ]
