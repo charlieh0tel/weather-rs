@@ -39,7 +39,7 @@ eSpeak, needs `sox`.
 | Report | What it gives | Source |
 |---|---|---|
 | `wx metar PLACE` | Current conditions at the nearest METAR station | aviationweather.gov |
-| `wx nws PLACE` | The forecast for the next half-day periods | api.weather.gov (US only) |
+| `wx nws PLACE` | Any active alerts, then the forecast for the next half-day periods | api.weather.gov (US only) |
 | `wx alerts PLACE` | Active alerts | api.weather.gov (US only) |
 | `wx where PLACE` | The forecast office, grid, zones and nearest stations | api.weather.gov (US only) |
 
@@ -51,13 +51,16 @@ Report options:
 | `-t`, `--temp-unit` | `metar` | `fahrenheit` (default) or `celsius` |
 | `--raw` | `metar` | Print the raw METAR instead |
 | `-p`, `--periods` | `nws` | How many half-day periods to read (default 2) |
+| `--no-alerts` | `nws` | Leave out active alerts |
 | `--only-if-any` | `alerts` | Announce nothing when none are in effect |
 | `-n`, `--stations` | `where` | How many nearby stations to list (default 5) |
 
 An alert is read as its headline, such as "Wind Advisory issued November 8 at
 3:02PM AKST until November 10 at 6:00PM AKST by NWS Fairbanks AK".  With no
 alerts in effect, `wx alerts` says so; with `--only-if-any` it announces
-nothing and exits successfully, so alerts can be checked often.  If a report
+nothing and exits successfully, so alerts can be checked often.  `wx nws`
+reads any alerts before the forecast, and says nothing about them when there
+are none; `--no-alerts` leaves them out.  If a report
 can't be fetched, `wx` fails.
 
 ## Places

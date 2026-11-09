@@ -136,6 +136,11 @@ struct NwsArgs {
     #[arg(short, long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..))]
     periods: u8,
 
+    /// Leave out active alerts, which are otherwise read before the forecast (nothing is said
+    /// about them when there are none)
+    #[arg(long)]
+    no_alerts: bool,
+
     #[command(flatten)]
     output: OutputArgs,
 
@@ -321,6 +326,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             Some(report::nws_forecast(
                 &args.place.location()?,
                 args.periods.into(),
+                !args.no_alerts,
             )?),
             &args.output,
             &args.voice,
@@ -395,6 +401,8 @@ mod tests {
     #[test]
     fn options_belong_to_their_report() {
         assert!(parse(&["nws", "--periods", "3", "KSJC"]).is_ok());
+        assert!(parse(&["nws", "--no-alerts", "KSJC"]).is_ok());
+        assert!(parse(&["metar", "--no-alerts", "KSJC"]).is_err());
         assert!(parse(&["alerts", "--only-if-any", "KSJC"]).is_ok());
         assert!(parse(&["metar", "--periods", "3", "KSJC"]).is_err());
         assert!(parse(&["nws", "--only-if-any", "KSJC"]).is_err());

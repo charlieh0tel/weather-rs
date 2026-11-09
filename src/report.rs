@@ -37,14 +37,22 @@ pub fn metar(place: &Location) -> Result<MetarData> {
     fetch_weather_data(&metar_station(place)?)
 }
 
-/// The National Weather Service forecast for a place, as text to speak.
-pub fn nws_forecast(place: &Location, periods: usize) -> Result<String> {
+/// The National Weather Service forecast for a place, as text to speak.  With `with_alerts`, any
+/// active alerts come first; when there are none, nothing is said about them.
+pub fn nws_forecast(place: &Location, periods: usize, with_alerts: bool) -> Result<String> {
     let nws = NwsClient::new()?;
-    let point = nws.point(nws.locate(place)?.coordinates)?;
-    let forecast = nws.forecast(&point)?;
-    Ok(forecast_announcement(
-        &forecast[..periods.min(forecast.len())],
-    ))
+    let coordinates = nws.locate(place)?.coordinates;
+    let alerts = if with_alerts {
+        nws.alerts(coordinates)?
+    } else {
+        Vec::new()
+    };
+    let forecast = nws.forecast(&nws.point(coordinates)?)?;
+    let forecast = forecast_announcement(&forecast[..periods.min(forecast.len())]);
+    if alerts.is_empty() {
+        return Ok(forecast);
+    }
+    Ok(format!("{} {forecast}", alerts_announcement(&alerts)))
 }
 
 /// Active National Weather Service alerts for a place, as text to speak.  `None` means none are

@@ -4,13 +4,16 @@
 .SH NAME
 wx\-nws \- The National Weather Service forecast (US only)
 .SH SYNOPSIS
-\fBwx nws\fR [\fB\-p\fR|\fB\-\-periods\fR] [\fB\-\-say\fR] [\fB\-o\fR|\fB\-\-out\fR] [\fB\-\-node\fR] [\fB\-l\fR|\fB\-\-to\-links\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-w\fR|\fB\-\-wait\fR] [\fB\-v\fR|\fB\-\-voice\fR] [\fB\-g\fR|\fB\-\-gain\fR] [\fB\-\-api\-key\-file\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIPLACE\fR> 
+\fBwx nws\fR [\fB\-p\fR|\fB\-\-periods\fR] [\fB\-\-no\-alerts\fR] [\fB\-\-say\fR] [\fB\-o\fR|\fB\-\-out\fR] [\fB\-\-node\fR] [\fB\-l\fR|\fB\-\-to\-links\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-w\fR|\fB\-\-wait\fR] [\fB\-v\fR|\fB\-\-voice\fR] [\fB\-g\fR|\fB\-\-gain\fR] [\fB\-\-api\-key\-file\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIPLACE\fR> 
 .SH DESCRIPTION
 The National Weather Service forecast (US only)
 .SH OPTIONS
 .TP
 \fB\-p\fR, \fB\-\-periods\fR \fI<PERIODS>\fR [default: 2]
 Number of half\-day forecast periods
+.TP
+\fB\-\-no\-alerts\fR
+Leave out active alerts, which are otherwise read before the forecast (nothing is said about them when there are none)
 .TP
 \fB\-\-say\fR
 Speak the announcement on this machine
