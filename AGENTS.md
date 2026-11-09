@@ -1,4 +1,4 @@
-# Agent Instructions for ut325f-rs
+# Agent Instructions for weather-rs
 
 - Always run `cargo fmt` after changes and before commits.
 - Always run `cargo clippy` after major changes and always before commits.
@@ -19,6 +19,6 @@
 - The man pages in man/ are generated from the commands' clap
   definitions.  After changing options or help text, run
   `UPDATE_MAN_PAGES=1 cargo test` and commit the result.
-- speak-weather and allstar-weather read the Google TTS API key from
-  --api-key-file, GOOGLE_CLOUD_API_KEY or
-  ~/.config/speak-weather/google-api-key, in that order.
+- wx reads the Google TTS API key from --api-key-file,
+  GOOGLE_CLOUD_API_KEY or ~/.config/weather-rs/google-api-key, in that
+  order.

@@ -32,7 +32,6 @@ pub enum WeatherError {
     UnknownStation(String),
     NoMetarStation(String),
     NoForecast(String),
-    Usage(String),
 }
 
 impl fmt::Display for WeatherError {
@@ -87,7 +86,6 @@ impl fmt::Display for WeatherError {
             WeatherError::NoForecast(point) => {
                 write!(f, "api.weather.gov has no forecast for {point}")
             }
-            WeatherError::Usage(message) => write!(f, "{message}"),
         }
     }
 }
@@ -390,42 +388,6 @@ fn parse_metar_response(icao: &str, status: reqwest::StatusCode, body: &str) -> 
         .into_iter()
         .next()
         .ok_or_else(|| WeatherError::NoData(icao.to_uppercase()))
-}
-
-pub fn display_weather(metar: &MetarData) {
-    println!("Raw METAR: {}", metar.raw_ob);
-    if let Some(ref name) = metar.name {
-        println!("Station: {}", name);
-    }
-    println!();
-
-    if let Some(temp_c) = metar.temp {
-        let temp_f = celsius_to_fahrenheit(temp_c);
-        println!("Temperature: {:.1}°F ({:.1}°C)", temp_f, temp_c);
-    } else {
-        println!("Temperature: Not available");
-    }
-
-    if let Some(ref wx) = metar.wx_string {
-        println!("Weather String: {}", wx);
-    } else {
-        println!("Weather: None reported");
-    }
-
-    let groups = metar
-        .wx_string
-        .as_deref()
-        .map(parse_weather_groups)
-        .unwrap_or_default();
-    if groups.is_empty() {
-        println!("WMO Codes Found: None");
-    } else {
-        println!("WMO Codes Found:");
-        for group in groups {
-            let description = group.description.as_deref().unwrap_or("Not understood");
-            println!("  - {} ({})", group.raw, description);
-        }
-    }
 }
 
 #[cfg(test)]
