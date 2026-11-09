@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH wx-nws 1  "nws " 
+.SH NAME
+wx\-nws \- The National Weather Service forecast (US only)
+.SH SYNOPSIS
+\fBwx nws\fR [\fB\-p\fR|\fB\-\-periods\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIPLACE\fR> 
+.SH DESCRIPTION
+The National Weather Service forecast (US only)
+.SH OPTIONS
+.TP
+\fB\-p\fR, \fB\-\-periods\fR \fI<PERIODS>\fR [default: 2]
+Number of half\-day forecast periods
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIPLACE\fR>
+A station (KSJC), latitude,longitude, US street address or place name ("Mountain View, CA"); quotes are optional

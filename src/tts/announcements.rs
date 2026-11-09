@@ -8,8 +8,8 @@ use crate::{
 
 #[derive(Debug, Clone, clap::ValueEnum)]
 pub enum AnnouncementFormat {
-    /// Direct speech output
-    Speech,
+    /// The full announcement, with the station's name
+    Full,
     /// Brief announcement format, without the station name
     Brief,
     /// Detailed weather report
@@ -115,10 +115,10 @@ fn announcement_at(
         .unwrap_or_default();
 
     match format {
-        AnnouncementFormat::Speech | AnnouncementFormat::Brief => {
+        AnnouncementFormat::Full | AnnouncementFormat::Brief => {
             let mut announcement = format!("Weather for {}... ", spell_out_icao(&metar.icao_id));
 
-            if let (AnnouncementFormat::Speech, Some(name)) = (format, &metar.name) {
+            if let (AnnouncementFormat::Full, Some(name)) = (format, &metar.name) {
                 announcement.push_str(&format!("{}... ", expand_station_name(name)));
             }
 
@@ -295,7 +295,7 @@ mod tests {
         ];
 
         for (metar, expected) in cases {
-            assert_eq!(announce(&metar, &AnnouncementFormat::Speech), expected);
+            assert_eq!(announce(&metar, &AnnouncementFormat::Full), expected);
         }
     }
 
@@ -365,7 +365,7 @@ mod tests {
         };
 
         assert_eq!(
-            announce(&metar, &AnnouncementFormat::Speech),
+            announce(&metar, &AnnouncementFormat::Full),
             "Weather for K S F O... Observed one six two eight zulu... Conditions... Unknown precipitation..."
         );
         assert_eq!(
@@ -382,7 +382,7 @@ mod tests {
         };
 
         for format in [
-            AnnouncementFormat::Speech,
+            AnnouncementFormat::Full,
             AnnouncementFormat::Brief,
             AnnouncementFormat::Detailed,
             AnnouncementFormat::Aviation,
@@ -464,7 +464,7 @@ mod tests {
                 "Temperature 68 degrees fahrenheit...",
             ),
             (
-                AnnouncementFormat::Speech,
+                AnnouncementFormat::Full,
                 TemperatureUnit::Celsius,
                 "Temperature... 20 degrees celsius...",
             ),
@@ -509,7 +509,7 @@ mod tests {
         };
 
         let cases = [
-            (AnnouncementFormat::Speech, "minus 40 degrees fahrenheit"),
+            (AnnouncementFormat::Full, "minus 40 degrees fahrenheit"),
             (AnnouncementFormat::Brief, "minus 40 degrees fahrenheit"),
             (
                 AnnouncementFormat::Detailed,

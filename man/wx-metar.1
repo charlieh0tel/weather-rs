@@ -1,0 +1,49 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH wx-metar 1  "metar " 
+.SH NAME
+wx\-metar \- Current conditions from the nearest METAR station, from aviationweather.gov
+.SH SYNOPSIS
+\fBwx metar\fR [\fB\-s\fR|\fB\-\-style\fR] [\fB\-t\fR|\fB\-\-temp\-unit\fR] [\fB\-\-raw\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIPLACE\fR> 
+.SH DESCRIPTION
+Current conditions from the nearest METAR station, from aviationweather.gov
+.SH OPTIONS
+.TP
+\fB\-s\fR, \fB\-\-style\fR \fI<STYLE>\fR [default: full]
+How to word the announcement
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+full: The full announcement, with the station\*(Aqs name
+.IP \(bu 2
+brief: Brief announcement format, without the station name
+.IP \(bu 2
+detailed: Detailed weather report
+.IP \(bu 2
+aviation: Aviation radio style
+.RE
+.TP
+\fB\-t\fR, \fB\-\-temp\-unit\fR \fI<TEMP_UNIT>\fR [default: fahrenheit]
+Temperature unit (the detailed style always gives both)
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+fahrenheit
+.IP \(bu 2
+celsius
+.RE
+.TP
+\fB\-\-raw\fR
+Print the raw METAR instead of an announcement
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+<\fIPLACE\fR>
+A station (KSJC), latitude,longitude, US street address or place name ("Mountain View, CA"); quotes are optional
