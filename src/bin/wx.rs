@@ -85,6 +85,30 @@ struct OutputArgs {
     /// With --node: seconds the node gets to open the audio file before it is deleted
     #[arg(short, long, default_value_t = 60, requires = "node")]
     wait: u64,
+
+    /// Text to say before the report ("This is the N0CALL repeater.")
+    #[arg(long, value_name = "TEXT")]
+    prelude: Option<String>,
+
+    /// Text to say after the report
+    #[arg(long, value_name = "TEXT")]
+    postlude: Option<String>,
+}
+
+impl OutputArgs {
+    fn frame(&self, report: &str) -> String {
+        [
+            self.prelude.as_deref(),
+            Some(report),
+            self.postlude.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+    }
 }
 
 #[derive(Args, Debug)]
@@ -338,7 +362,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         ),
     };
     match text {
-        Some(text) => deliver(&text, output, voice),
+        Some(text) => deliver(&output.frame(&text), output, voice),
         None => {
             eprintln!("{}", report::NOTHING_TO_ANNOUNCE);
             Ok(())
@@ -419,6 +443,32 @@ mod tests {
         assert!(parse(&["metar", "KSJC", "--to-links"]).is_err());
         assert!(parse(&["metar", "KSJC", "--wait", "5"]).is_err());
         assert!(parse(&["metar", "KSJC", "--raw", "--node", "65314"]).is_err());
+    }
+
+    #[test]
+    fn prelude_and_postlude_frame_the_report() {
+        let output = |args: &[&str]| {
+            let Command::Alerts(args) = parse(args).unwrap().command else {
+                panic!()
+            };
+            args.output
+        };
+        assert_eq!(
+            output(&[
+                "alerts",
+                "KSJC",
+                "--prelude",
+                " This is N0CALL. ",
+                "--postlude",
+                "73."
+            ])
+            .frame("No alerts."),
+            "This is N0CALL. No alerts. 73."
+        );
+        assert_eq!(
+            output(&["alerts", "KSJC", "--postlude", ""]).frame("No alerts."),
+            "No alerts."
+        );
     }
 
     #[test]

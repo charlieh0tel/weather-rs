@@ -4,7 +4,7 @@
 .SH NAME
 wx\-nws \- The National Weather Service forecast (US only)
 .SH SYNOPSIS
-\fBwx nws\fR [\fB\-p\fR|\fB\-\-periods\fR] [\fB\-\-no\-alerts\fR] [\fB\-\-say\fR] [\fB\-o\fR|\fB\-\-out\fR] [\fB\-\-node\fR] [\fB\-l\fR|\fB\-\-to\-links\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-w\fR|\fB\-\-wait\fR] [\fB\-v\fR|\fB\-\-voice\fR] [\fB\-g\fR|\fB\-\-gain\fR] [\fB\-\-api\-key\-file\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIPLACE\fR> 
+\fBwx nws\fR [\fB\-p\fR|\fB\-\-periods\fR] [\fB\-\-no\-alerts\fR] [\fB\-\-say\fR] [\fB\-o\fR|\fB\-\-out\fR] [\fB\-\-node\fR] [\fB\-l\fR|\fB\-\-to\-links\fR] [\fB\-a\fR|\fB\-\-audio\-format\fR] [\fB\-w\fR|\fB\-\-wait\fR] [\fB\-\-prelude\fR] [\fB\-\-postlude\fR] [\fB\-v\fR|\fB\-\-voice\fR] [\fB\-g\fR|\fB\-\-gain\fR] [\fB\-\-api\-key\-file\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIPLACE\fR> 
 .SH DESCRIPTION
 The National Weather Service forecast (US only)
 .SH OPTIONS
@@ -52,6 +52,12 @@ sln16: Raw 16\-bit signed linear at 16 kHz, for Asterisk to convert as each chan
 .TP
 \fB\-w\fR, \fB\-\-wait\fR \fI<WAIT>\fR [default: 60]
 With \-\-node: seconds the node gets to open the audio file before it is deleted
+.TP
+\fB\-\-prelude\fR \fI<TEXT>\fR
+Text to say before the report ("This is the N0CALL repeater.")
+.TP
+\fB\-\-postlude\fR \fI<TEXT>\fR
+Text to say after the report
 .TP
 \fB\-v\fR, \fB\-\-voice\fR \fI<VOICE>\fR [default: en\-US\-Chirp3\-HD\-Leda]
 A Google voice name, or espeak

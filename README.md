@@ -91,6 +91,8 @@ stderr, so stdout carries only the announcement.
 | `-l`, `--to-links` | With `--node`, send it to linked nodes too |
 | `-a`, `--audio-format` | Override the format (default `sln16` with `--node`) |
 | `-w`, `--wait` | With `--node`, seconds the node gets to open the file before it is deleted (default 60) |
+| `--prelude TEXT` | Say TEXT before the report, such as "This is the N0CALL repeater." |
+| `--postlude TEXT` | Say TEXT after the report |
 
 ### Voices
 
